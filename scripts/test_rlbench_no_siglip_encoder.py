@@ -368,6 +368,7 @@ def main(args):
         obs_dict = env.reset()
         terminated = False
         success = False
+        gripper_open = None
         
         for j in range(episode_length):
             
