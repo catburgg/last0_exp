@@ -117,7 +117,8 @@ def model_load(args):
     vl_chat_processor: VLChatProcessor = VLChatProcessor.from_pretrained(args.model_path)
     tokenizer = vl_chat_processor.tokenizer
     vl_gpt: MultiModalityCausalLM = AutoModelForCausalLM.from_pretrained(
-        args.model_path, trust_remote_code=True, torch_dtype=torch.bfloat16
+        args.model_path, trust_remote_code=True, torch_dtype=torch.bfloat16,
+        diff=True, action_dim=7
     )
     action_tokenizer = ActionTokenizer(tokenizer)
 
@@ -147,6 +148,7 @@ def model_predict(args, vl_gpt, vl_chat_processor, action_tokenizer, statistic, 
     action_token_num = 7
     img_size = 384
     patch_size = 16
+    num_ddim_steps = args.ddim_steps
 
     state_tokens = ""
     if args.use_robot_state:
@@ -182,9 +184,6 @@ def model_predict(args, vl_gpt, vl_chat_processor, action_tokenizer, statistic, 
         image_embeds_input = vl_gpt.prepare_gen_img_embeds(image_tokens_input)
 
         input_ids =  torch.LongTensor(vl_chat_processor.tokenizer.encode(sft_format))
-        new_value = torch.tensor(207).expand(*input_ids.shape[:-1], 1)
-        input_ids = torch.cat([input_ids, new_value], dim=-1)
-        
         tokens = torch.zeros((parallel_size, len(input_ids)), dtype=torch.long).to(device)
 
         for i in range(parallel_size):
@@ -195,36 +194,33 @@ def model_predict(args, vl_gpt, vl_chat_processor, action_tokenizer, statistic, 
 
         tokens[tokens < 0] = 0  # ignore the image embeddings
         inputs_embeds = vl_gpt.language_model.get_input_embeddings()(tokens)
+
         image_gen_indices = (tokens == vl_chat_processor.image_start_id).nonzero()
         for in_img_index, ind in enumerate(image_gen_indices):
             offset = ind[1] + 1
             inputs_embeds[ind[0], offset:offset+image_embeds_input.shape[1], :] = image_embeds_input[in_img_index]
 
-        ### ------generate action "mode 1" -------- #####
-        generate_ids = vl_gpt.language_model.generate(inputs_embeds=inputs_embeds, max_new_tokens=7)
-        print(generate_ids)
-
-        ### ------generate action "mode 2" -------- #####
-        # generated_action_tokens = torch.zeros((parallel_size, action_token_num), dtype=torch.int).to(device)
-        # for i in range(action_token_num):
-        #     outputs = vl_gpt.language_model.model(inputs_embeds=cur_inputs_embeds if i != 0 else inputs_embeds, use_cache=True, past_key_values=outputs.past_key_values if i != 0 else None)
-        #     hidden_states = outputs.last_hidden_state
-
-        #     logits = vl_gpt.language_model.lm_head(hidden_states[:, -1, :])
-
-        #     # ch: ------ #
-        #     probs = torch.softmax(logits / temperature, dim=-1)
-        #     next_token = torch.multinomial(probs, num_samples=1)
-        #     # next_token = torch.argmax(logits, dim=-1, keepdim=True)
-        #     # ch: ------ #
-
-        #     generated_action_tokens[:, i] = next_token.squeeze(dim=-1)
-        #     next_token = next_token.view(-1)
-        #     action_emb = vl_gpt.language_model.get_input_embeddings()(next_token)
-        #     cur_inputs_embeds = action_emb.unsqueeze(dim=1)
-        # print(generated_action_tokens)
         
-        normalized_actions = action_tokenizer.decode_token_ids_to_actions(generate_ids.cpu().numpy())
+        noise = torch.randn(inputs_embeds.shape[0], args.action_chunk, 7, device=device)
+        sample_fn = vl_gpt.forward_diff
+        model_kwargs = {'inputs_embeds': inputs_embeds}
+        if num_ddim_steps is not None:
+            if vl_gpt.ddim_diffusion is None:
+                vl_gpt.create_ddim(ddim_step=num_ddim_steps)
+            samples = vl_gpt.ddim_diffusion.ddim_sample_loop(
+                sample_fn, 
+                noise.shape, 
+                noise, 
+                clip_denoised=False,
+                model_kwargs=model_kwargs,
+                progress=False,
+                device=device,
+                eta=0.0
+            )
+        else:
+            raise ValueError("no ddim steps!")
+        
+        normalized_actions = samples[0].cpu().numpy()
         if normalized_actions.ndim == 1:
             dim = len(normalized_actions)
             if dim == 7 or dim == 14:
@@ -237,7 +233,6 @@ def model_predict(args, vl_gpt, vl_chat_processor, action_tokenizer, statistic, 
                 normalized_actions[:, 6] = (normalized_actions[:, 6] >= 0.5).astype(int)
             if dim == 14:
                 normalized_actions[:, 13] = (normalized_actions[:, 13] >= 0.5).astype(int)
-
 
         actions = np.where(
             statistic['action_mask'],
@@ -449,6 +444,7 @@ if __name__ == '__main__':
     parser.add_argument('--model-path', type=str, default='')
     parser.add_argument('--exp-name', type=str, default=None)
     parser.add_argument('--max-steps', type=int, default=10)
+    parser.add_argument('--ddim-steps', type=int, default=10)
     parser.add_argument('--cuda', type=str, default='7')
     parser.add_argument('--use_robot_state', type=int, default=1)
     parser.add_argument('--load-pointcloud', type=int, default=0)

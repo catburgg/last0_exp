@@ -76,8 +76,11 @@ class TrainingMetrics:
         self.action_loss = torch.Tensor([0]).to(device=device)
         self.world_size = dist.get_world_size()
 
-    def __call__(self, image_logits, image_labels, image_loss, action_logits, action_labels, action_loss):
-        return self.update(image_logits, image_labels, image_loss, action_logits, action_labels, action_loss)
+    def __call__(self, has_img, image_logits, image_labels, image_loss, action_logits, action_labels, action_loss):
+        if has_img:
+            return self.update(image_logits, image_labels, image_loss, action_logits, action_labels, action_loss)
+        else:
+            return self.update_action(action_logits, action_labels, action_loss)
 
     def update(self, image_logits, image_labels, image_loss, action_logits, action_labels, action_loss):
         self.n_step += 1
@@ -88,6 +91,15 @@ class TrainingMetrics:
             self.image_total += (shift_image_labels != -100).sum().item()
             self.image_loss += image_loss.item()
 
+            shift_action_preds = action_logits.argmax(dim=-1) # logits[..., :-1, :].argmax(dim=-1)
+            shift_action_labels = action_labels # labels[..., 1:]
+            self.action_right += (shift_action_preds == shift_action_labels).masked_fill(shift_action_labels.eq(-100), 0).sum().item()
+            self.action_total += (shift_action_labels != -100).sum().item()
+            self.action_loss += action_loss.item()
+
+    def update_action(self, action_logits, action_labels, action_loss):
+        self.n_step += 1
+        with torch.no_grad():
             shift_action_preds = action_logits.argmax(dim=-1) # logits[..., :-1, :].argmax(dim=-1)
             shift_action_labels = action_labels # labels[..., 1:]
             self.action_right += (shift_action_preds == shift_action_labels).masked_fill(shift_action_labels.eq(-100), 0).sum().item()
@@ -117,6 +129,21 @@ class TrainingMetrics:
             self.action_loss.fill_(0)
         return image_acc, image_loss, action_acc, action_loss
 
+    def get_metric_action(self, reset=True):
+        dist.all_reduce(self.action_right, op=torch.distributed.ReduceOp.SUM)
+        dist.all_reduce(self.action_total, op=torch.distributed.ReduceOp.SUM)
+        dist.all_reduce(self.action_loss, op=torch.distributed.ReduceOp.SUM)
+        action_acc = (self.action_right / self.action_total).item()
+        action_loss = self.action_loss.item() / (self.world_size * self.n_step)
+
+        if reset:
+            self.n_step = 0
+            self.action_right.fill_(0)
+            self.action_total.fill_(0)
+            self.action_loss.fill_(0)
+        return 0, 0, action_acc, action_loss
+
+    
 
 class SftDataset(Dataset):
     def __init__(self, config, processor,accelerator, model):
@@ -152,12 +179,7 @@ class SftDataset(Dataset):
 
     def __getitem__(self, index: int) -> Dict[str, torch.Tensor]:
         return self.data[index]
-    
-    def get_code_book(self,image_paths):
-        images = [PIL.Image.open(image_path).convert("RGB") for image_path in image_paths]
-        images_outputs = self.processor.image_processor(images, return_tensors="pt")
-        return images_outputs['pixel_values'].to(torch.bfloat16)
-    
+
     def process_image(self,image_paths):
         images = [PIL.Image.open(image_path).convert("RGB") for image_path in image_paths]
         images_outputs = self.processor.image_processor(images, return_tensors="pt")
@@ -173,7 +195,7 @@ class SftDataset(Dataset):
         input_pixel_values = self.process_image(input_images).to(torch.bfloat16) if len(input_images) > 0 else None
 
         input_img_tokens = self.processor.image_start_tag + self.processor.pad_tag*self.processor.num_image_tokens +self.processor.image_end_tag
-        output_img_tokens = self.processor.image_start_tag + self.processor.pad_tag*self.processor.num_image_tokens 
+        output_img_tokens = self.processor.image_start_tag + self.processor.pad_tag*self.processor.num_image_tokens if self.config.image_generation else ""
 
         pre_data = []
 
@@ -219,14 +241,8 @@ class SftDataset(Dataset):
             else:
                 encoder_pixel_values = None
                 num_image_tokens = []
-                    
+            
             input_ids =  torch.LongTensor(self.processor.tokenizer.encode(sft_format))
-
-            # # Image generation has a probability of masking
-            # if  img_len == 0  and random.random() < 0.1:
-            #     masklen =  len(self.processor.tokenizer.encode(pre_format))
-            #     input_ids[1:masklen]  = self.processor.pad_id
-
             pre_data.append(VLChatProcessorOutput(sft_format=sft_format, pixel_values=encoder_pixel_values, input_ids=input_ids, num_image_tokens=num_image_tokens))
 
 
@@ -288,16 +304,18 @@ def train(args: argparse.Namespace) -> None:
         gradient_accumulation_steps=args.gradient_accumulation_steps
     )
 
+    # Set random seed
+    set_seed(args.seed)
+
     if accelerator.is_main_process:
         wandb.init(
             project=args.experiment_name,
             name=args.run_name,
             config=args,
             dir=args.log_dir,
-            mode="offline"
+            mode="online"
         )
 
-    # Set batch size
     accelerator.state.deepspeed_plugin.deepspeed_config['train_micro_batch_size_per_gpu'] = args.train_bsz_per_gpu
     accelerator.state.deepspeed_plugin.deepspeed_config['train_batch_size'] = (
         args.train_bsz_per_gpu * 
@@ -305,7 +323,6 @@ def train(args: argparse.Namespace) -> None:
         accelerator.gradient_accumulation_steps
     )
 
-    # Load model and tokenizer
     processor = VLChatProcessor.from_pretrained(
         args.model_path,
         trust_remote_code=True
@@ -319,11 +336,9 @@ def train(args: argparse.Namespace) -> None:
     model_config = model.config
 
     for name, param in model.named_parameters():
-        if name.startswith("vision_model") or name.startswith("aligner"): #or name.startswith("gen_vision_model"): # choose whatever you like here
+        if name.startswith("vision_model") or name.startswith("aligner") or name.startswith("gen_vision_model"): # choose whatever you like here
             param.requires_grad = False
 
-
-    # Configure optimizer
     no_decay = ["bias", "LayerNorm.weight"]
     optimizer_grouped_parameters = [
         {
@@ -337,21 +352,18 @@ def train(args: argparse.Namespace) -> None:
     ]
     optimizer = torch.optim.AdamW(optimizer_grouped_parameters, lr=args.learning_rate)
 
-    # Prepare data loader
     train_dataset = SftDataset(args, processor,accelerator,model)
     train_dataloader = DataLoader(
         train_dataset,
         batch_size=args.train_bsz_per_gpu,
         shuffle=True,
-        drop_last=True,
+        # drop_last=True,
         collate_fn=train_dataset.collate_fn,
         num_workers=4
     )
 
-    # Set learning rate scheduler
     num_training_steps = int(len(train_dataloader) * args.n_epochs) // accelerator.gradient_accumulation_steps // dist.get_world_size()
 
-    # Use custom scheduler instead of original call
     lr_scheduler = get_custom_cosine_schedule_with_warmup(
         optimizer,
         num_warmup_steps=int(args.warmup_rates * num_training_steps),
@@ -359,7 +371,6 @@ def train(args: argparse.Namespace) -> None:
         min_lr_ratio=args.min_lr_ratio  # Pass minimum learning rate ratio directly
     )
 
-    # Prepare training
     model, optimizer, train_dataloader = accelerator.prepare(model, optimizer, train_dataloader)
 
     metric = TrainingMetrics(device=torch.cuda.current_device())
@@ -368,15 +379,8 @@ def train(args: argparse.Namespace) -> None:
 
     for epoch in range(0, args.n_epochs):
         train_iter = tqdm(train_dataloader, total=len(train_dataloader)) if accelerator.is_main_process else train_dataloader
-
         for batch in train_iter:
 
-            quant, emb_loss, info = model.gen_vision_model.encode(batch['pixel_values'])
-            image_tokens = info[2].detach().reshape(batch['pixel_values'].shape[0], -1)
-            image_embeds = model.prepare_gen_img_embeds(image_tokens)
-
-            ### +2 means: <image start token> and <prompt end token>
-            action_tokens = batch['input_ids'][:, -(image_embeds.shape[1]+2+args.action_dim) : -(image_embeds.shape[1]+2)]
             if batch['input_pixel_values'] is not None:
                 quant_input, emb_loss_input, info_input = model.gen_vision_model.encode(batch['input_pixel_values'])
                 image_tokens_input = info_input[2].detach().reshape(batch['input_pixel_values'].shape[0], -1)
@@ -390,22 +394,19 @@ def train(args: argparse.Namespace) -> None:
                 # import time
                 # time.sleep(100)
 
-                # inputs_embeds = model.prepare_inputs_embeds(
-                #     input_ids=batch['input_ids'],
-                #     pixel_values=batch['encoder_pixel_values'],
-                #     images_emb_mask=batch['images_emb_mask'],
-                #     images_seq_mask=batch['images_seq_mask']
-                # )
-
                 batch['input_ids'][batch['input_ids'] < 0] = 0  # ignore the image embeddings
                 inputs_embeds = model.language_model.get_input_embeddings()(batch['input_ids'])
 
                 # Find the position of the input image gen and concatenate it
                 image_gen_indices = (batch['input_ids'] == processor.image_start_id).nonzero()
-                for ii, ind in enumerate(image_gen_indices):
-                    if ii % 2 == 0:
-                        offset = ind[1] + 1
-                        inputs_embeds[ind[0],offset: offset+image_embeds_input.shape[1],:] = image_embeds_input[ii // 2]
+                if args.image_generation:
+                    image_gen_indices = [
+                        ind for ii, ind in enumerate(image_gen_indices) 
+                        if (ii + 1) % (image_embeds_input.shape[0] // args.train_bsz_per_gpu + 1) != 0
+                    ]
+                for in_img_index, ind in enumerate(image_gen_indices):
+                    offset = ind[1] + 1
+                    inputs_embeds[ind[0], offset:offset+image_embeds_input.shape[1], :] = image_embeds_input[in_img_index]
             else:
                 inputs_embeds = model.prepare_inputs_embeds(
                     input_ids=batch['input_ids'],
@@ -414,10 +415,12 @@ def train(args: argparse.Namespace) -> None:
                     images_seq_mask=batch['images_seq_mask']
                 )
             
-            inputs_embeds[:, -image_embeds.shape[1]:,:] = image_embeds
+            if args.image_generation:
+                quant, emb_loss, info = model.gen_vision_model.encode(batch['pixel_values'])
+                image_tokens = info[2].detach().reshape(batch['pixel_values'].shape[0], -1).contiguous()
+                image_embeds = model.prepare_gen_img_embeds(image_tokens)
+                inputs_embeds[:, -image_embeds.shape[1]:,:] = image_embeds
 
-
-            # forward and calculate loss
             outputs = model.language_model.model(
                 inputs_embeds=inputs_embeds,
                 attention_mask=batch['attention_mask'],
@@ -427,21 +430,26 @@ def train(args: argparse.Namespace) -> None:
             
             hidden_states = outputs.last_hidden_state
 
-            image_logits = model.gen_head(hidden_states[:, -(image_embeds.shape[1]+1) : -1, :])
-            action_logits = model.language_model.lm_head(hidden_states[:, -(image_embeds.shape[1]+3+args.action_dim) : -(image_embeds.shape[1]+3), :])
+            if args.image_generation:
+                ### +2 means: <image start token> and <prompt end token>
+                action_tokens = batch['input_ids'][:, -(image_embeds.shape[1]+2+args.action_dim) : -(image_embeds.shape[1]+2)].contiguous()
+                action_logits = model.language_model.lm_head(hidden_states[:, -(image_embeds.shape[1]+3+args.action_dim) : -(image_embeds.shape[1]+3), :])
+                action_loss = model.language_model.loss_function(logits=action_logits, labels=None, vocab_size=action_logits.shape[-1], shift_labels=action_tokens)
+                image_logits = model.gen_head(hidden_states[:, -(image_embeds.shape[1]+1) : -1, :])
+                image_loss = model.language_model.loss_function(logits=image_logits, labels=None, vocab_size=model_config.gen_vision_config.params.image_token_size, shift_labels=image_tokens)
+                loss = action_loss * 0.5 + image_loss * 0.5
+                metric(args.image_generation, image_logits, image_tokens, image_loss, action_logits, action_tokens, action_loss)
+            else:
+                ### +1 means: <prompt end token>
+                action_tokens = batch['input_ids'][:, -(args.action_dim+1) : -1].contiguous()
+                action_logits = model.language_model.lm_head(hidden_states[:, -(2+args.action_dim) : -2, :])
+                action_loss = model.language_model.loss_function(logits=action_logits, labels=None, vocab_size=action_logits.shape[-1], shift_labels=action_tokens)
+                loss = action_loss
+                metric(args.image_generation, None, None, None, action_logits, action_tokens, action_loss)
 
-            image_loss = model.language_model.loss_function(logits=image_logits, labels=None, vocab_size=model_config.gen_vision_config.params.image_token_size, shift_labels=image_tokens)
-            action_loss = model.language_model.loss_function(logits=action_logits, labels=None, vocab_size=action_logits.shape[-1], shift_labels=action_tokens)
-
-            # Calculate metrics
-            metric(image_logits, image_tokens, image_loss, action_logits, action_tokens, action_loss)
-
-            # Backpropagation
-            loss = action_loss * 0.5 +  image_loss * 0.5
             accelerator.backward(loss)
 
             if (global_step + 1) % accelerator.gradient_accumulation_steps == 0:
-                # Add gradient clipping
                 if args.max_grad_norm > 0:
                     accelerator.clip_grad_norm_(model.parameters(), args.max_grad_norm)
 
@@ -449,10 +457,7 @@ def train(args: argparse.Namespace) -> None:
                 lr_scheduler.step()
                 optimizer.zero_grad()
 
-                if ((global_step + 1) // accelerator.gradient_accumulation_steps) % 2 == 0:
-                    torch.cuda.empty_cache()
-
-                iamge_acc, image_loss, action_acc, action_loss= metric.get_metric()
+                iamge_acc, image_loss, action_acc, action_loss= metric.get_metric() if args.image_generation else metric.get_metric_action()
                 if accelerator.is_main_process:
                     train_iter.set_postfix(
                         epoch=epoch,
@@ -505,6 +510,7 @@ if __name__ == '__main__':
     parser.add_argument('--log_dir', type=str, default='./train_logs', help='Log save path')
     parser.add_argument('--action_dim', type=int, default=7, help='action dim')
     parser.add_argument('--robot_state', action='store_true', default=False, help='enable robot state')
+    parser.add_argument('--image_generation', type=int, default=0, help='generate image')
 
     # Training related
     parser.add_argument('--max_seq_len', type=int, default=4096, help='Maximum sequence length')
@@ -530,9 +536,6 @@ if __name__ == '__main__':
 
     os.makedirs(args.log_dir, exist_ok=True)
     os.makedirs(args.output_dir, exist_ok=True)
-
-    # Set random seed
-    set_seed(args.seed)
 
     # Start training
     train(args)     

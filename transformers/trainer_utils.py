@@ -100,6 +100,11 @@ def set_seed(seed: int, deterministic: bool = False):
         deterministic (`bool`, *optional*, defaults to `False`):
             Whether to use deterministic algorithms where available. Can slow down training.
     """
+    
+    import torch.distributed as dist
+    rank = dist.get_rank()
+    seed = seed + rank  
+
     random.seed(seed)
     np.random.seed(seed)
     if is_torch_available():

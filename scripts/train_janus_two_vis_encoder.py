@@ -357,7 +357,7 @@ def train(args: argparse.Namespace) -> None:
     )
 
     # Prepare training
-    model, optimizer, train_dataloader = accelerator.prepare(model, optimizer, train_dataloader)
+    model, optimizer, train_dataloader,lr_scheduler = accelerator.prepare(model, optimizer, train_dataloader, lr_scheduler)
 
     metric = TrainingMetrics(device=torch.cuda.current_device())
     model.train()

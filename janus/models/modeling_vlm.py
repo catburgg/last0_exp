@@ -28,10 +28,13 @@ from transformers import (
     PreTrainedModel,
 )
 from transformers.configuration_utils import PretrainedConfig
+from transformers.cache_utils import DynamicCache
 
 from janus.models.clip_encoder import CLIPVisionTower
 from janus.models.projector import MlpProjector
-
+from janus.diffusion import ActionEmbedder, TimestepEmbedder, FinalLayer
+from janus.diffusion import create_diffusion
+import torch.nn as nn
 
 class vision_head(torch.nn.Module):
     def __init__(self, params):
@@ -188,8 +191,13 @@ class MultiModalityPreTrainedModel(PreTrainedModel):
 
 
 class MultiModalityCausalLM(MultiModalityPreTrainedModel):
-    def __init__(self, config: MultiModalityConfig):
+    def __init__(self, config: MultiModalityConfig,
+                action_dim = None,
+                diff = False,
+                diffusion_steps = 100,
+                ):
         super().__init__(config)
+        self.diff = diff
 
         vision_config = config.vision_config
         vision_cls = model_name_to_cls(vision_config.cls)
@@ -217,8 +225,9 @@ class MultiModalityCausalLM(MultiModalityPreTrainedModel):
         )
 
         language_config = config.language_config
-        # language_config.attn_implementation = "sdpa"
-        # language_config.attn_implementation = "flash_attention_2"
+        # language_config._attn_implementation = "sdpa"
+        # language_config._attn_implementation = "flash_attention_2"
+        # language_config._attn_implementation = "eager"
         language_config.torch_dtype = torch.bfloat16
         language_config.bf16 = True
         self.language_model = LlamaForCausalLM(language_config)
@@ -227,6 +236,73 @@ class MultiModalityCausalLM(MultiModalityPreTrainedModel):
         for key, value in language_config.__dict__.items():
             if key not in self.config.__dict__:
                 setattr(self.config, key, value)
+
+        ###-------  diff  -------###
+        if self.diff:
+            self.x_embedder = ActionEmbedder(action_size=action_dim, hidden_size=language_config.hidden_size)
+            self.t_embedder = TimestepEmbedder(language_config.hidden_size)
+            self.final_layer = FinalLayer(language_config.hidden_size, action_dim)
+            self.ddim_diffusion = None
+            self.diffusion_steps = diffusion_steps
+            self.diffusion = create_diffusion(timestep_respacing="", noise_schedule = 'squaredcos_cap_v2', diffusion_steps=self.diffusion_steps, sigma_small=True, learn_sigma = False)
+
+
+    def create_ddim(self, ddim_step=10, noise_schedule = 'squaredcos_cap_v2', diffusion_steps = 100):
+        self.ddim_diffusion = create_diffusion(timestep_respacing = "ddim"+str(ddim_step), 
+                                               noise_schedule = noise_schedule,
+                                               diffusion_steps = diffusion_steps, 
+                                               sigma_small = True, 
+                                               learn_sigma = False
+                                               )
+        return self.ddim_diffusion
+    
+
+
+    def forward_diff(self, noise, timestep, past_key_values, inputs_embeds):
+        noisy_actions = self.x_embedder(noise.to(torch.bfloat16))
+        timesteps = self.t_embedder(timestep).unsqueeze(1)
+        if past_key_values is None:
+            inputs_embeds = torch.cat([
+                inputs_embeds,
+                timesteps,
+                noisy_actions,
+            ], dim=1)
+        else:
+            inputs_embeds = torch.cat([timesteps, noisy_actions], dim=1)
+            past_key_values = tuple(
+                (k[:, :, :-(timesteps.shape[1]+noisy_actions.shape[1]), :], v[:, :, :-(timesteps.shape[1]+noisy_actions.shape[1]), :]) for k, v in past_key_values
+            )
+            past_key_values = DynamicCache.from_legacy_cache(past_key_values)
+
+        outputs = self.language_model.model(
+            inputs_embeds=inputs_embeds,
+            past_key_values=past_key_values,
+            return_dict=True,
+            use_cache=True
+        )
+        hidden_states = outputs.last_hidden_state
+        predicted_noise = self.final_layer(hidden_states)[:, -noisy_actions.shape[1]:, :]
+        return outputs, predicted_noise
+
+        
+
+    def initialize_weights(self):
+        if self.diff:
+            print("init!!!")
+            nn.init.normal_(self.x_embedder.mlp.fc1.weight, std=0.02)
+            nn.init.normal_(self.x_embedder.mlp.fc2.weight, std=0.02)
+            nn.init.constant_(self.x_embedder.mlp.fc1.bias, 0)
+            nn.init.constant_(self.x_embedder.mlp.fc2.bias, 0)
+
+            nn.init.normal_(self.t_embedder.mlp[0].weight, std=0.02)
+            nn.init.normal_(self.t_embedder.mlp[2].weight, std=0.02)
+            nn.init.constant_(self.t_embedder.mlp[0].bias, 0)
+            nn.init.constant_(self.t_embedder.mlp[2].bias, 0)
+
+            nn.init.normal_(self.final_layer.mlp.fc1.weight, std=0.02)
+            nn.init.constant_(self.final_layer.mlp.fc1.bias, 0)
+            nn.init.constant_(self.final_layer.mlp.fc2.weight, 0)
+            nn.init.constant_(self.final_layer.mlp.fc2.bias, 0)
 
     def prepare_inputs_embeds(
         self,

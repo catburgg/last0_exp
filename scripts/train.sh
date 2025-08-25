@@ -13,19 +13,21 @@ accelerate launch --config_file ../config/sft.yaml \
     --num_processes 8  \
     --num_machines 1 \
     --machine_rank 0 \
-    --deepspeed_multinode_launcher standard train_janus_no_siglip_encoder.py \
-    --model_path deepseek-ai/Janus-Pro-7B \
+    --deepspeed_multinode_launcher standard train_janus_no_siglip_encoder_diff.py \
+    --model_path deepseek-ai/Janus-Pro-1B \
     --data_path ../training_data/json/4tasks_train.json \
-    --n_epochs 30 \
+    --n_epochs 200 \
     --action_dim 7 \
-    --train_bsz_per_gpu 1 \
-    --learning_rate 1e-4 \
+    --train_bsz_per_gpu 8 \
+    --learning_rate 2e-5 \
+    --min_lr_ratio 1.0 \
     --weight_decay 0 \
-    --gradient_accumulation_steps 8 \
+    --gradient_accumulation_steps 1 \
     --output_dir ../exp \
     --log_dir ../exp \
-    --experiment_name action_image \
-    --run_name "janus_pro_no_siglip_encoder_7B_no_state_lr_1e-4_weightdecay_0" \
+    --experiment_name action_rlbench_4tasks \
+    --image_generation 0 \
+    --run_name "janus_pro_no_siglip_encoder_1B_no_state_lr_2e-5" \
 
 
 # FreedomIntelligence/Janus-4o-7B   deepseek-ai/Janus-Pro-7B
