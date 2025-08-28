@@ -466,7 +466,7 @@ def train(args: argparse.Namespace) -> None:
                 action_loss = nn.MSELoss()(predicted_noise, batch['noise'])
                 image_logits = model.gen_head(hidden_states[:, -(image_embeds.shape[1]+1) : -1, :])
                 image_loss = model.language_model.loss_function(logits=image_logits, labels=None, vocab_size=model_config.gen_vision_config.params.image_token_size, shift_labels=image_tokens)
-                loss = action_loss * 0.5 + image_loss * 0.5
+                loss = action_loss + image_loss
                 metric(args.image_generation, image_logits, image_tokens, image_loss, action_loss)
             else:
                 predicted_noise = model.final_layer(hidden_states)[:, -(batch['noise'].shape[1]):, :]

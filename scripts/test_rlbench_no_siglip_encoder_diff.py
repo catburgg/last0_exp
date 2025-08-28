@@ -194,7 +194,6 @@ def model_predict(args, vl_gpt, vl_chat_processor, action_tokenizer, statistic, 
 
         tokens[tokens < 0] = 0  # ignore the image embeddings
         inputs_embeds = vl_gpt.language_model.get_input_embeddings()(tokens)
-
         image_gen_indices = (tokens == vl_chat_processor.image_start_id).nonzero()
         for in_img_index, ind in enumerate(image_gen_indices):
             offset = ind[1] + 1
@@ -240,12 +239,28 @@ def model_predict(args, vl_gpt, vl_chat_processor, action_tokenizer, statistic, 
             normalized_actions,
         )
 
-
         if args.image_generation:
             # --------------generate image------------ #
+            normalized_actions = torch.tensor(normalized_actions).reshape(normalized_actions.shape[0], -1, 7)
+            noise = torch.randn_like(normalized_actions).to(torch.bfloat16)
+            timesteps = torch.randint(
+                0, 
+                vl_gpt.diffusion.num_timesteps, 
+                (normalized_actions.shape[0],)
+            )
+            noisy_actions = vl_gpt.diffusion.q_sample(normalized_actions, timesteps, noise).to(torch.bfloat16).to(device)
 
-            add_tokens = [100001, 100016] if '7B' in args.model_path else [100001, 100003]
-            add_tokens = torch.cat([generate_ids, torch.tensor([add_tokens]*generate_ids.shape[0]).to(device)], dim=-1)
+            noisy_actions = vl_gpt.x_embedder(noisy_actions)
+            timesteps = vl_gpt.t_embedder(timesteps.to(device)).unsqueeze(1)
+
+            inputs_embeds = torch.cat([
+                inputs_embeds,
+                timesteps,
+                noisy_actions
+            ], dim=1)
+
+            add_tokens = [100016] if '7B' in args.model_path else [100003]
+            add_tokens = torch.tensor([add_tokens]*inputs_embeds.shape[0]).to(device)
             add_embeds = vl_gpt.language_model.get_input_embeddings()(add_tokens)
             inputs_embeds = torch.cat([inputs_embeds, add_embeds], dim=1)
 

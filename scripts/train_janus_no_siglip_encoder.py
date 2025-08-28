@@ -6,7 +6,6 @@ import argparse
 import random
 import shutil
 from typing import List, Dict, Any
-from dataclasses import dataclass
 
 import wandb
 from tqdm import tqdm
@@ -29,6 +28,7 @@ import numpy as np
 logger = logging.getLogger(__name__)
 logging.basicConfig(level='INFO')
 
+from dataclasses import dataclass
 @dataclass
 class VLChatProcessorOutput():
     sft_format: str

@@ -16,7 +16,7 @@ accelerate launch --config_file ../config/sft.yaml \
     --deepspeed_multinode_launcher standard train_janus_no_siglip_encoder_diff.py \
     --model_path deepseek-ai/Janus-Pro-1B \
     --data_path ../training_data/json/4tasks_train.json \
-    --n_epochs 200 \
+    --n_epochs 500 \
     --action_dim 7 \
     --train_bsz_per_gpu 8 \
     --learning_rate 2e-5 \
@@ -26,8 +26,8 @@ accelerate launch --config_file ../config/sft.yaml \
     --output_dir ../exp \
     --log_dir ../exp \
     --experiment_name action_rlbench_4tasks \
-    --image_generation 0 \
-    --run_name "janus_pro_no_siglip_encoder_1B_no_state_lr_2e-5" \
+    --image_generation 1 \
+    --run_name "janus_pro_no_siglip_encoder_diff_1B_no_state_lr_2e-5_WITH_image" \
 
 
 # FreedomIntelligence/Janus-4o-7B   deepseek-ai/Janus-Pro-7B
