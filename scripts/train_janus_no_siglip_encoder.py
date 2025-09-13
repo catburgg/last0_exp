@@ -6,6 +6,7 @@ import argparse
 import random
 import shutil
 from typing import List, Dict, Any
+from scipy.spatial.transform import Rotation as R
 
 import wandb
 from tqdm import tqdm
@@ -38,6 +39,44 @@ class VLChatProcessorOutput():
 
     def __len__(self):
         return len(self.input_ids)
+
+
+def unique_euler_xyz_rad(angles, range_style="2pi"):
+    """
+    输入: 欧拉角 (xyz 顺序)，弧度制 (任意范围, 可正可负, 可超过 2π)
+    输出: 欧拉角 (xyz 顺序)，弧度制，严格唯一表示
+
+    参数:
+        precision: 保留小数位数
+        range_style: "negpi" -> (-π, π], "2pi" -> [0, 2π)
+    """
+    # 输入是弧度
+    rot = R.from_euler('xyz', angles, degrees=False)
+    
+    # 转回 xyz (弧度制)
+    euler = rot.as_euler('xyz', degrees=False)
+    
+    # wrap 到 (-π, π]
+    euler = (euler + np.pi) % (2 * np.pi) - np.pi
+    
+    # 约束: y ∈ [-π/2, π/2]
+    if euler[1] > np.pi/2:
+        euler[1] = np.pi - euler[1]
+        euler[0] += np.pi
+        euler[2] += np.pi
+    elif euler[1] < -np.pi/2:
+        euler[1] = -np.pi - euler[1]
+        euler[0] += np.pi
+        euler[2] += np.pi
+    
+    # 再 wrap 一次
+    euler = (euler + np.pi) % (2 * np.pi) - np.pi
+    
+    # 如果要求 [0, 2π)，再转换
+    if range_style == "2pi":
+        euler = euler % (2 * np.pi)
+    
+    return euler
 
 def get_custom_cosine_schedule_with_warmup(
     optimizer, 
@@ -143,6 +182,133 @@ class TrainingMetrics:
             self.action_loss.fill_(0)
         return 0, 0, action_acc, action_loss
 
+
+
+
+class SftDataset_4_Npy(Dataset):
+    def __init__(self, config, processor,accelerator, model):
+        self.config = config
+        self.processor = processor
+        self.tokenizer = processor.tokenizer
+        self.action_tokenizer = ActionTokenizer(self.tokenizer)
+        self.accelerator = accelerator
+        self.image_len = 576
+        self.input_img_num = 1
+
+        self.input_img_tokens = self.processor.image_start_tag + self.processor.pad_tag*self.processor.num_image_tokens +self.processor.image_end_tag
+        self.output_img_tokens = self.processor.image_start_tag + self.processor.pad_tag*self.processor.num_image_tokens if self.config.image_generation else ""
+
+        self.data_root = self.config.data_root
+        with open(config.data_path,'r') as f:
+            self.data = json.load(f)
+
+        statistics_path = config.data_path.replace(".json", "_statistics.json")
+        with open(statistics_path, 'r') as f:
+            self.stats_data = json.load(f)
+
+        self.dataset_name = next(iter(self.stats_data))
+        self.action_mask = np.array(self.stats_data[self.dataset_name]['action']['mask'])
+        self.action_min = np.array(self.stats_data[self.dataset_name]['action']['q01'])
+        self.action_max = np.array(self.stats_data[self.dataset_name]['action']['q99'])
+        if self.config.robot_state:
+            self.state_mask = np.array(self.stats_data[self.dataset_name]['state']['mask'])
+            self.state_min = np.array(self.stats_data[self.dataset_name]['state']['q01'])
+            self.state_max = np.array(self.stats_data[self.dataset_name]['state']['q99'])
+
+        self.img_dir = os.path.dirname(config.data_path)
+        accelerator.print(f'Total data amount: {len(self.data)}')
+
+  
+    def __len__(self) -> int:
+        return len(self.data)
+
+    def __getitem__(self, index: int) -> Dict[str, torch.Tensor]:
+        return self.data[index]
+
+    def process_image(self, images):
+        images_outputs = self.processor.image_processor(images, return_tensors="pt")
+        return images_outputs['pixel_values']
+
+    def collate_fn(self, batch: List[Dict[str, torch.Tensor]]) -> Dict[str, torch.Tensor]:
+        gen_images = []
+        input_images = []
+        pre_data = []
+
+        for x in batch:
+            npy_data = np.load(f"{self.data_root}/{x['npy']}", allow_pickle=True)
+            x_gen_image = PIL.Image.fromarray(npy_data[x['idx']+1]['front_image'])
+            gen_images.append(x_gen_image)
+            x_input_image = PIL.Image.fromarray(npy_data[x['idx']]['front_image'])
+            input_images.append(x_input_image)
+            action = np.array(npy_data[x['idx']]['action'], dtype=np.float32)
+
+            actions_7d = [action[i*7:(i+1)*7] for i in range(8)]
+            delta_positions = [action[:3] for action in actions_7d]
+            abs_rots = [action[3:6] for action in actions_7d]
+            grippers = [action[-1] for action in actions_7d]
+            delta_position_total = np.sum(delta_positions, axis=0)
+            action = np.concatenate([delta_position_total, abs_rots[-1], [grippers[-1]]])
+            action[3:6] = unique_euler_xyz_rad(action[3:6])
+
+            state = np.array(npy_data[x['idx']]['state'], dtype=np.float32) if self.config.robot_state else None
+            lang_prompt = npy_data[x['idx']]['language_instruction']
+
+            normalized_action = np.where(
+                self.action_mask,
+                np.clip(2 * (action - self.action_min) / (self.action_max - self.action_min + 1e-8) - 1, -1, 1),
+                action
+            )
+            action_tokens = ""
+            action_tokens += self.action_tokenizer(normalized_action)
+
+            state_tokens = ""
+            if self.config.robot_state:
+                normalized_state = np.where(
+                    self.state_mask,
+                    np.clip(2 * (state - self.state_min) / (self.state_max - self.state_min + 1e-8) - 1, -1, 1),
+                    state
+                )
+                state_tokens += self.action_tokenizer(normalized_state)
+
+            prompts = self.input_img_tokens * self.input_img_num + lang_prompt + state_tokens # First, place image tokens at the input end <img_encoder><img_gen>..
+
+            conversation = [
+                {"role": "<|User|>","content": prompts},
+                {"role": "<|Assistant|>", "content": f"{action_tokens}"}
+            ]
+
+            pre_format = self.processor.apply_sft_template_for_multi_turn_prompts(
+                conversations=conversation,
+                sft_format=self.processor.sft_format,
+                system_prompt="",
+            )
+            sft_format = pre_format + self.output_img_tokens
+            
+            if self.input_img_num > 0:
+                encoder_pixel_values = self.process_image([x_input_image])
+                num_image_tokens = [self.image_len] * self.input_img_num
+            else:
+                encoder_pixel_values = None
+                num_image_tokens = []
+            
+            input_ids =  torch.LongTensor(self.processor.tokenizer.encode(sft_format))
+            pre_data.append(VLChatProcessorOutput(sft_format=sft_format, pixel_values=encoder_pixel_values, input_ids=input_ids, num_image_tokens=num_image_tokens))
+
+        pixel_values = self.process_image(gen_images).to(torch.bfloat16)
+        input_pixel_values = self.process_image(input_images).to(torch.bfloat16)
+
+        if len(pre_data) > 0:
+            prepare_inputs = self.processor.batchify(pre_data)
+
+        return {
+            "input_ids": prepare_inputs.input_ids,
+            "pixel_values": pixel_values,
+            "input_pixel_values": input_pixel_values,
+            "encoder_pixel_values": prepare_inputs.pixel_values.to(torch.bfloat16),
+            "attention_mask": prepare_inputs.attention_mask,
+            "images_seq_mask": prepare_inputs['images_seq_mask'],
+            "images_emb_mask": prepare_inputs['images_emb_mask']
+        }
     
 
 class SftDataset(Dataset):
@@ -153,9 +319,8 @@ class SftDataset(Dataset):
         self.action_tokenizer = ActionTokenizer(self.tokenizer)
         self.accelerator = accelerator
         self.image_len = 576
-        self.data = []
         with open(config.data_path,'r') as f:
-            data = json.load(f)
+            self.data = json.load(f)
 
         statistics_path = config.data_path.replace(".json", "_statistics.json")
         with open(statistics_path, 'r') as f:
@@ -170,7 +335,6 @@ class SftDataset(Dataset):
         self.state_max = np.array(self.stats_data[self.dataset_name]['state']['q99'])
 
         self.img_dir = os.path.dirname(config.data_path)
-        self.data = data
         accelerator.print(f'Total data amount: {len(self.data)}')
 
   
@@ -352,14 +516,14 @@ def train(args: argparse.Namespace) -> None:
     ]
     optimizer = torch.optim.AdamW(optimizer_grouped_parameters, lr=args.learning_rate)
 
-    train_dataset = SftDataset(args, processor,accelerator,model)
+    train_dataset = SftDataset_4_Npy(args, processor,accelerator,model)
     train_dataloader = DataLoader(
         train_dataset,
         batch_size=args.train_bsz_per_gpu,
         shuffle=True,
         # drop_last=True,
         collate_fn=train_dataset.collate_fn,
-        num_workers=4
+        num_workers=8
     )
 
     num_training_steps = int(len(train_dataloader) * args.n_epochs) // accelerator.gradient_accumulation_steps // dist.get_world_size()
@@ -481,7 +645,21 @@ def train(args: argparse.Namespace) -> None:
 
             global_step += 1
 
-        if epoch == args.n_epochs-1:
+        # if epoch == args.n_epochs-1:
+        #     accelerator.wait_for_everyone()
+        #     save_checkpoint(
+        #         model=model,
+        #         processor=processor, 
+        #         accelerator=accelerator,
+        #         args=args,
+        #         epoch=epoch,
+        #         step=global_step-1,
+        #         global_step=global_step,
+        #         is_last=True,
+        #         stats_data = train_dataset.stats_data,
+        #     )
+
+        if ((epoch + 1) % 10 == 0) or (epoch == args.n_epochs-1):
             accelerator.wait_for_everyone()
             save_checkpoint(
                 model=model,
@@ -491,8 +669,8 @@ def train(args: argparse.Namespace) -> None:
                 epoch=epoch,
                 step=global_step-1,
                 global_step=global_step,
-                is_last=True,
-                stats_data = train_dataset.stats_data,
+                is_last=(epoch == args.n_epochs-1),
+                stats_data=train_dataset.stats_data,
             )
 
 if __name__ == '__main__':
@@ -505,6 +683,7 @@ if __name__ == '__main__':
 
     # Data related
     parser.add_argument('--data_path', type=str, required=True, help='Training data path, can be multiple paths')
+    parser.add_argument('--data_root', type=str, required=True, default='')
     parser.add_argument('--output_dir', type=str, default='./', help='Model save path')
     parser.add_argument('--max_ckpts', type=int, default=5, help='Maximum number of checkpoints to save')
     parser.add_argument('--log_dir', type=str, default='./train_logs', help='Log save path')

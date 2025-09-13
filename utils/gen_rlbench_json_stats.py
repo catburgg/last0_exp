@@ -223,16 +223,16 @@ def cal_stats(jsonl_filename):
 data_root = "/gpfs/0607-cluster/chenhao/data/rlbench/keyframe_fast_slow_chunk8_addlast_0806/for_rlds"
 img_save_root = "/gpfs/0607-cluster/chenhao/DoubleRL-VLA/training_data/rlbench"
 json_save_root = "/gpfs/0607-cluster/chenhao/DoubleRL-VLA/training_data/json"
-jsonl_filename = f'{json_save_root}/4tasks_train.jsonl'
-json_file = f'{json_save_root}/4tasks_train.json'
+jsonl_filename = f'{json_save_root}/close_box_train.jsonl'
+json_file = f'{json_save_root}/close_box_train.json'
 
 task_lists = [
   'close_box',
 #   'close_fridge',
-  'close_laptop_lid',
-  'phone_on_base',
+#   'close_laptop_lid',
+#   'phone_on_base',
 #   'place_wine_at_rack_location',
-  'sweep_to_dustpan',
+#   'sweep_to_dustpan',
 #   'take_frame_off_hanger',
 #   'take_umbrella_out_of_umbrella_stand',
 #   'toilet_seat_down',
