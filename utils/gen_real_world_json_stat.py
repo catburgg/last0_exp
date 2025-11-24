@@ -5,42 +5,44 @@ import os
 import re
 from scipy.spatial.transform import Rotation as R
 
-def unique_euler_xyz_rad(angles, range_style="2pi"):
-    """
-    输入: 欧拉角 (xyz 顺序)，弧度制 (任意范围, 可正可负, 可超过 2π)
-    输出: 欧拉角 (xyz 顺序)，弧度制，严格唯一表示
+# def unique_euler_xyz_rad(angles, range_style="2pi"):
+#     """
+#     输入: 欧拉角 (xyz 顺序)，弧度制 (任意范围, 可正可负, 可超过 2π)
+#     输出: 欧拉角 (xyz 顺序)，弧度制，严格唯一表示
 
-    参数:
-        precision: 保留小数位数
-        range_style: "negpi" -> (-π, π], "2pi" -> [0, 2π)
-    """
-    # 输入是弧度
-    rot = R.from_euler('xyz', angles, degrees=False)
+#     参数:
+#         precision: 保留小数位数
+#         range_style: "negpi" -> (-π, π], "2pi" -> [0, 2π)
+#     """
+#     # 输入是弧度
+#     rot = R.from_euler('xyz', angles, degrees=False)
     
-    # 转回 xyz (弧度制)
-    euler = rot.as_euler('xyz', degrees=False)
+#     # 转回 xyz (弧度制)
+#     euler = rot.as_euler('xyz', degrees=False)
     
-    # wrap 到 (-π, π]
-    euler = (euler + np.pi) % (2 * np.pi) - np.pi
+#     # wrap 到 (-π, π]
+#     euler = (euler + np.pi) % (2 * np.pi) - np.pi
     
-    # 约束: y ∈ [-π/2, π/2]
-    if euler[1] > np.pi/2:
-        euler[1] = np.pi - euler[1]
-        euler[0] += np.pi
-        euler[2] += np.pi
-    elif euler[1] < -np.pi/2:
-        euler[1] = -np.pi - euler[1]
-        euler[0] += np.pi
-        euler[2] += np.pi
+#     # 约束: y ∈ [-π/2, π/2]
+#     if euler[1] > np.pi/2:
+#         euler[1] = np.pi - euler[1]
+#         euler[0] += np.pi
+#         euler[2] += np.pi
+#     elif euler[1] < -np.pi/2:
+#         euler[1] = -np.pi - euler[1]
+#         euler[0] += np.pi
+#         euler[2] += np.pi
     
-    # 再 wrap 一次
-    euler = (euler + np.pi) % (2 * np.pi) - np.pi
+#     # 再 wrap 一次
+#     euler = (euler + np.pi) % (2 * np.pi) - np.pi
     
-    # 如果要求 [0, 2π)，再转换
-    if range_style == "2pi":
-        euler = euler % (2 * np.pi)
+#     # 如果要求 [0, 2π)，再转换
+#     if range_style == "2pi":
+#         euler = euler % (2 * np.pi)
     
-    return euler
+#     return euler
+
+
 
 def npy_2_jsonl(data_root, img_save_root, jsonl_filename, task_lists):
     with open(jsonl_filename, 'w') as f:

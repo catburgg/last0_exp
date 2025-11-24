@@ -559,6 +559,8 @@ class DynamicCache(Cache):
 
         return self.key_cache[layer_idx], self.value_cache[layer_idx]
 
+
+
     def get_seq_length(self, layer_idx: Optional[int] = 0) -> int:
         """Returns the sequence length of the cached states. A layer index can be optionally passed."""
         # TODO: deprecate this function in favor of `cache_position`

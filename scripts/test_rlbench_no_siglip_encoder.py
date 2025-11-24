@@ -47,45 +47,6 @@ class VLChatProcessorOutput():
     def __len__(self):
         return len(self.input_ids)
 
-
-def unique_euler_xyz_rad(angles, range_style="2pi"):
-    """
-    输入: 欧拉角 (xyz 顺序)，弧度制 (任意范围, 可正可负, 可超过 2π)
-    输出: 欧拉角 (xyz 顺序)，弧度制，严格唯一表示
-
-    参数:
-        precision: 保留小数位数
-        range_style: "negpi" -> (-π, π], "2pi" -> [0, 2π)
-    """
-    # 输入是弧度
-    rot = R.from_euler('xyz', angles, degrees=False)
-    
-    # 转回 xyz (弧度制)
-    euler = rot.as_euler('xyz', degrees=False)
-    
-    # wrap 到 (-π, π]
-    euler = (euler + np.pi) % (2 * np.pi) - np.pi
-    
-    # 约束: y ∈ [-π/2, π/2]
-    if euler[1] > np.pi/2:
-        euler[1] = np.pi - euler[1]
-        euler[0] += np.pi
-        euler[2] += np.pi
-    elif euler[1] < -np.pi/2:
-        euler[1] = -np.pi - euler[1]
-        euler[0] += np.pi
-        euler[2] += np.pi
-    
-    # 再 wrap 一次
-    euler = (euler + np.pi) % (2 * np.pi) - np.pi
-    
-    # 如果要求 [0, 2π)，再转换
-    if range_style == "2pi":
-        euler = euler % (2 * np.pi)
-    
-    return euler
-
-
 def setup_logger(log_dir):
     log_filename = os.path.join(log_dir, "output.log")
     
@@ -112,7 +73,6 @@ def recreate_directory(directory_path):
         shutil.rmtree(directory_path)
     os.makedirs(directory_path, exist_ok=True)
 
-
 def model_load(args):
     vl_chat_processor: VLChatProcessor = VLChatProcessor.from_pretrained(args.model_path)
     tokenizer = vl_chat_processor.tokenizer
@@ -137,7 +97,6 @@ def model_load(args):
 
     return vl_gpt, vl_chat_processor, action_tokenizer, statistic
 
-
 def model_predict(args, vl_gpt, vl_chat_processor, action_tokenizer, statistic, task_description, image, state, pointcloud, pre_image_dir, step):
     device = f'cuda:{args.cuda}'
     vl_gpt = vl_gpt.to(device).eval()
@@ -160,14 +119,12 @@ def model_predict(args, vl_gpt, vl_chat_processor, action_tokenizer, statistic, 
         state_tokens += action_tokenizer(normalized_state)
 
 
-    input_img_tokens_1 = vl_chat_processor.image_start_tag + vl_chat_processor.image_tag*vl_chat_processor.num_image_tokens +vl_chat_processor.image_end_tag
     input_img_tokens_2 = vl_chat_processor.image_start_tag + vl_chat_processor.pad_tag*vl_chat_processor.num_image_tokens +vl_chat_processor.image_end_tag
-    pre_data = []
-    user_content = input_img_tokens_2 * img_len + task_description + state_tokens
+    user_content = input_img_tokens_2 * img_len + task_description + state_tokens + vl_chat_processor.image_start_tag
 
     conversation = [
                     {"role": "<|User|>","content": user_content},
-                    {"role": "<|Assistant|>", "content": ""}
+                    # {"role": "<|Assistant|>", "content": ""}
                 ]
 
     sft_format = vl_chat_processor.apply_sft_template_for_multi_turn_prompts(
@@ -183,40 +140,145 @@ def model_predict(args, vl_gpt, vl_chat_processor, action_tokenizer, statistic, 
         image_embeds_input = vl_gpt.prepare_gen_img_embeds(image_tokens_input)
 
         input_ids =  torch.LongTensor(vl_chat_processor.tokenizer.encode(sft_format))
-        new_value = torch.tensor(207).expand(*input_ids.shape[:-1], 1)
-        input_ids = torch.cat([input_ids, new_value], dim=-1)
-        
         tokens = torch.zeros((parallel_size, len(input_ids)), dtype=torch.long).to(device)
 
         for i in range(parallel_size):
             tokens[i, :] = input_ids
-        
+        image_embeds_input = image_embeds_input.repeat(parallel_size, 1, 1)
+
         # torch.set_printoptions(threshold=10_000)
         # print(tokens)
+        # print(image_embeds_input.shape)
 
         tokens[tokens < 0] = 0  # ignore the image embeddings
         inputs_embeds = vl_gpt.language_model.get_input_embeddings()(tokens)
         image_gen_indices = (tokens == vl_chat_processor.image_start_id).nonzero()
+        if args.image_generation:
+            image_gen_indices = [
+                ind for ii, ind in enumerate(image_gen_indices) 
+                if (ii + 1) % 2 != 0
+            ]
         for in_img_index, ind in enumerate(image_gen_indices):
             offset = ind[1] + 1
             inputs_embeds[ind[0], offset:offset+image_embeds_input.shape[1], :] = image_embeds_input[in_img_index]
 
-        ### ------generate action "mode 1" -------- #####
-        generate_ids = vl_gpt.language_model.generate(inputs_embeds=inputs_embeds, max_new_tokens=7)
-        print(generate_ids)
+        # --------------generate image------------ #
+        # if args.image_generation:
+        #     generated_tokens = torch.zeros((parallel_size, image_token_num_per_image), dtype=torch.int).to(device)
+        #     img_embeds_list = []
+        #     for i in range(image_token_num_per_image):
+        #         if i == 0:
+        #             outputs = vl_gpt.language_model.model(
+        #                 inputs_embeds=inputs_embeds, 
+        #                 use_cache=True,
+        #                 image_indexes=torch.arange(0, inputs_embeds.shape[1]).to(device),
+        #                 action_indexes=torch.arange(0, 0).to(device)
+        #             )
+        #         else:
+        #             outputs = vl_gpt.language_model.model(
+        #                 inputs_embeds=cur_inputs_embeds, 
+        #                 use_cache=True,
+        #                 past_key_values=outputs.past_key_values,
+        #                 image_indexes=torch.arange(0, 1).to(device),
+        #                 action_indexes=torch.arange(0, 0).to(device)
+        #             )
+        #         hidden_states = outputs.last_hidden_state
+        #         logits = vl_gpt.gen_head(hidden_states[:, -1, :])
 
-        ### ------generate action "mode 2" -------- #####
+        #         # ch: ------ #
+        #         # probs = torch.softmax(logits / temperature, dim=-1)
+        #         # next_token = torch.multinomial(probs, num_samples=1)
+        #         next_token = torch.argmax(logits, dim=-1, keepdim=True)
+        #         # ch: ------ #
+
+        #         generated_tokens[:, i] = next_token.squeeze(dim=-1)
+        #         next_token = next_token.view(-1)
+        #         img_embeds = vl_gpt.prepare_gen_img_embeds(next_token)
+        #         cur_inputs_embeds = img_embeds.unsqueeze(dim=1)
+        #         img_embeds_list.append(cur_inputs_embeds)
+
+        #     dec = vl_gpt.gen_vision_model.decode_code(generated_tokens.to(dtype=torch.int), shape=[parallel_size, 8, img_size//patch_size, img_size//patch_size])
+        #     dec = dec.to(torch.float32).cpu().numpy().transpose(0, 2, 3, 1)
+
+        #     dec = np.clip((dec + 1) / 2 * 255, 0, 255)
+
+        #     visual_img = np.zeros((parallel_size, img_size, img_size, 3), dtype=np.uint8)
+        #     visual_img[:, :, :] = dec
+
+        #     for i in range(parallel_size):
+        #         save_path = os.path.join(pre_image_dir, f'step_{step}.png')
+        #         PIL.Image.fromarray(visual_img[i]).save(save_path)
+
+        if args.image_generation:
+            generated_tokens = torch.zeros((parallel_size, image_token_num_per_image), dtype=torch.int).to(device)
+            img_embeds_list = []
+            for i in range(image_token_num_per_image):
+                outputs = vl_gpt.language_model.model(
+                    inputs_embeds=inputs_embeds, 
+                    image_indexes=torch.arange(0, inputs_embeds.shape[1]).to(device),
+                    action_indexes=torch.arange(0, 0).to(device)
+                )
+                hidden_states = outputs.last_hidden_state
+                logits = vl_gpt.gen_head(hidden_states[:, -1, :])
+
+                # ch: ------ #
+                # probs = torch.softmax(logits / temperature, dim=-1)
+                # next_token = torch.multinomial(probs, num_samples=1)
+                next_token = torch.argmax(logits, dim=-1, keepdim=True)
+                # ch: ------ #
+
+                generated_tokens[:, i] = next_token.squeeze(dim=-1)
+                next_token = next_token.view(-1)
+                img_embeds = vl_gpt.prepare_gen_img_embeds(next_token)
+                cur_inputs_embeds = img_embeds.unsqueeze(dim=1)
+                inputs_embeds = torch.cat([inputs_embeds, cur_inputs_embeds], dim=1)
+
+            dec = vl_gpt.gen_vision_model.decode_code(generated_tokens.to(dtype=torch.int), shape=[parallel_size, 8, img_size//patch_size, img_size//patch_size])
+            dec = dec.to(torch.float32).cpu().numpy().transpose(0, 2, 3, 1)
+            dec = np.clip((dec + 1) / 2 * 255, 0, 255)
+            visual_img = np.zeros((parallel_size, img_size, img_size, 3), dtype=np.uint8)
+            visual_img[:, :, :] = dec
+            for i in range(parallel_size):
+                save_path = os.path.join(pre_image_dir, f'step_{step}.png')
+                PIL.Image.fromarray(visual_img[i]).save(save_path)
+
+        # ### ------generate action "mode 1" -------- #####
+        # generate_ids = vl_gpt.language_model.generate(inputs_embeds=inputs_embeds, max_new_tokens=7)
+        # print(generate_ids)
+
+        # ### ------generate action "mode 2" -------- #####
+        # stacked_img_embeds = torch.cat(img_embeds_list, dim=1)
+        # inputs_embeds = torch.cat([inputs_embeds, stacked_img_embeds], dim=1)
         # generated_action_tokens = torch.zeros((parallel_size, action_token_num), dtype=torch.int).to(device)
-        # for i in range(action_token_num):
-        #     outputs = vl_gpt.language_model.model(inputs_embeds=cur_inputs_embeds if i != 0 else inputs_embeds, use_cache=True, past_key_values=outputs.past_key_values if i != 0 else None)
-        #     hidden_states = outputs.last_hidden_state
 
+        # add_tokens = torch.tensor([vl_chat_processor.image_end_id]*generated_action_tokens.shape[0]).to(device)
+        # add_embeds = vl_gpt.language_model.get_input_embeddings()(add_tokens).unsqueeze(1)
+        # inputs_embeds = torch.cat([inputs_embeds, add_embeds], dim=1)
+        
+        # for i in range(action_token_num):
+        #     if i == 0:
+        #         outputs = vl_gpt.language_model.model(
+        #             inputs_embeds=inputs_embeds, 
+        #             use_cache=True,
+        #             image_indexes=torch.arange(0, inputs_embeds.shape[1]).to(device),
+        #             action_indexes=torch.arange(0, 0).to(device)
+        #         )
+        #     else:
+        #         outputs = vl_gpt.language_model.model(
+        #             inputs_embeds=cur_inputs_embeds, 
+        #             use_cache=True,
+        #             past_key_values=outputs.past_key_values,
+        #             image_indexes=torch.arange(0, 0).to(device),
+        #             action_indexes=torch.arange(0, 1).to(device)
+        #         )
+
+        #     hidden_states = outputs.last_hidden_state
         #     logits = vl_gpt.language_model.lm_head(hidden_states[:, -1, :])
 
         #     # ch: ------ #
-        #     probs = torch.softmax(logits / temperature, dim=-1)
-        #     next_token = torch.multinomial(probs, num_samples=1)
-        #     # next_token = torch.argmax(logits, dim=-1, keepdim=True)
+        #     # probs = torch.softmax(logits / temperature, dim=-1)
+        #     # next_token = torch.multinomial(probs, num_samples=1)
+        #     next_token = torch.argmax(logits, dim=-1, keepdim=True)
         #     # ch: ------ #
 
         #     generated_action_tokens[:, i] = next_token.squeeze(dim=-1)
@@ -224,8 +286,39 @@ def model_predict(args, vl_gpt, vl_chat_processor, action_tokenizer, statistic, 
         #     action_emb = vl_gpt.language_model.get_input_embeddings()(next_token)
         #     cur_inputs_embeds = action_emb.unsqueeze(dim=1)
         # print(generated_action_tokens)
+
+
+        ### ------generate action "mode 2" -------- #####
+        generated_action_tokens = torch.zeros((parallel_size, action_token_num), dtype=torch.int).to(device)
+        add_tokens = torch.tensor([vl_chat_processor.image_end_id]*generated_action_tokens.shape[0]).to(device)
+        add_embeds = vl_gpt.language_model.get_input_embeddings()(add_tokens).unsqueeze(1)
+        inputs_embeds = torch.cat([inputs_embeds, add_embeds], dim=1)
         
-        normalized_actions = action_tokenizer.decode_token_ids_to_actions(generate_ids.cpu().numpy())
+        images_len = inputs_embeds.shape[1]
+        for i in range(action_token_num):
+            outputs = vl_gpt.language_model.model(
+                inputs_embeds=inputs_embeds, 
+                image_indexes=torch.arange(0, images_len).to(device),
+                action_indexes=torch.arange(images_len, images_len+i).to(device)
+            )
+
+            hidden_states = outputs.last_hidden_state
+            logits = vl_gpt.language_model.lm_head(hidden_states[:, -1, :])
+
+            # ch: ------ #
+            # probs = torch.softmax(logits / temperature, dim=-1)
+            # next_token = torch.multinomial(probs, num_samples=1)
+            next_token = torch.argmax(logits, dim=-1, keepdim=True)
+            # ch: ------ #
+
+            generated_action_tokens[:, i] = next_token.squeeze(dim=-1)
+            next_token = next_token.view(-1)
+            action_emb = vl_gpt.language_model.get_input_embeddings()(next_token)
+            cur_inputs_embeds = action_emb.unsqueeze(dim=1)
+            inputs_embeds = torch.cat([inputs_embeds, cur_inputs_embeds], dim=1)
+        print(generated_action_tokens)
+
+        normalized_actions = action_tokenizer.decode_token_ids_to_actions(generated_action_tokens.cpu().numpy())
         if normalized_actions.ndim == 1:
             dim = len(normalized_actions)
             if dim == 7 or dim == 14:
@@ -247,20 +340,88 @@ def model_predict(args, vl_gpt, vl_chat_processor, action_tokenizer, statistic, 
         )
 
 
+        return actions
+
+def model_predict_mask_once_kvcache(args, vl_gpt, vl_chat_processor, action_tokenizer, statistic, task_description, image, state, pointcloud, pre_image_dir, step):
+    device = f'cuda:{args.cuda}'
+    vl_gpt = vl_gpt.to(device).eval()
+    parallel_size=1
+    img_len = 1
+    temperature = 1.0
+    image_token_num_per_image = 576
+    action_token_num = 7
+    img_size = 384
+    patch_size = 16
+
+    state_tokens = ""
+    if args.use_robot_state:
+        state = np.array(state, dtype=np.float32)
+        normalized_state = np.where(
+            statistic['state_mask'],
+            np.clip(2 * (state - statistic['state_min']) / (statistic['state_max'] - statistic['state_min'] + 1e-8) - 1, -1, 1),
+            state
+        )
+        state_tokens += action_tokenizer(normalized_state)
+
+
+    input_img_tokens_2 = vl_chat_processor.image_start_tag + vl_chat_processor.pad_tag*vl_chat_processor.num_image_tokens +vl_chat_processor.image_end_tag
+    user_content = input_img_tokens_2 * img_len + task_description + state_tokens + vl_chat_processor.image_start_tag
+
+    conversation = [
+                    {"role": "<|User|>","content": user_content},
+                    # {"role": "<|Assistant|>", "content": ""}
+                ]
+
+    sft_format = vl_chat_processor.apply_sft_template_for_multi_turn_prompts(
+            conversations=conversation,
+            sft_format=vl_chat_processor.sft_format,
+            system_prompt="",
+        )
+
+    with torch.inference_mode():
+        input_image_pixel_values = vl_chat_processor.image_processor(image, return_tensors="pt")['pixel_values'].to(torch.bfloat16).to(device)
+        quant_input, emb_loss_input, info_input = vl_gpt.gen_vision_model.encode(input_image_pixel_values)
+        image_tokens_input = info_input[2].detach().reshape(input_image_pixel_values.shape[0], -1)
+        image_embeds_input = vl_gpt.prepare_gen_img_embeds(image_tokens_input)
+
+        input_ids =  torch.LongTensor(vl_chat_processor.tokenizer.encode(sft_format))
+        tokens = torch.zeros((parallel_size, len(input_ids)), dtype=torch.long).to(device)
+
+        for i in range(parallel_size):
+            tokens[i, :] = input_ids
+        image_embeds_input = image_embeds_input.repeat(parallel_size, 1, 1)
+
+        # torch.set_printoptions(threshold=10_000)
+        # print(tokens)
+        # print(image_embeds_input.shape)
+        
+        tokens[tokens < 0] = 0  # ignore the image embeddings
+        inputs_embeds = vl_gpt.language_model.get_input_embeddings()(tokens)
+        image_gen_indices = (tokens == vl_chat_processor.image_start_id).nonzero()
         if args.image_generation:
-            # --------------generate image------------ #
+            image_gen_indices = [
+                ind for ii, ind in enumerate(image_gen_indices) 
+                if (ii + 1) % 2 != 0
+            ]
+        for in_img_index, ind in enumerate(image_gen_indices):
+            offset = ind[1] + 1
+            inputs_embeds[ind[0], offset:offset+image_embeds_input.shape[1], :] = image_embeds_input[in_img_index]
+        
+        action_condition_len = inputs_embeds.shape[1]-1
+        generated_tokens = torch.zeros((parallel_size, image_token_num_per_image), dtype=torch.int).to(device)
+        generated_action_tokens = torch.zeros((parallel_size, action_token_num), dtype=torch.int).to(device)
+        for i in range(image_token_num_per_image+action_token_num):
 
-            add_tokens = [100001, 100016] if '7B' in args.model_path else [100001, 100003]
-            add_tokens = torch.cat([generate_ids, torch.tensor([add_tokens]*generate_ids.shape[0]).to(device)], dim=-1)
-            add_embeds = vl_gpt.language_model.get_input_embeddings()(add_tokens)
-            inputs_embeds = torch.cat([inputs_embeds, add_embeds], dim=1)
-
-
-            generated_tokens = torch.zeros((parallel_size, image_token_num_per_image), dtype=torch.int).to(device)
-            for i in range(image_token_num_per_image):
-                outputs = vl_gpt.language_model.model(inputs_embeds=inputs_embeds, use_cache=True, past_key_values=outputs.past_key_values if i != 0 else None)
+            if i<image_token_num_per_image:
+                outputs = vl_gpt.language_model.model(
+                    inputs_embeds=inputs_embeds, 
+                    image_indexes=torch.arange(0, inputs_embeds.shape[1]).to(device),
+                    action_indexes=torch.arange(0, 0).to(device),
+                    image_generation = args.image_generation,
+                    use_cache=True, 
+                    past_key_values=outputs.past_key_values if i!=0 else None
+                )
                 hidden_states = outputs.last_hidden_state
-
                 logits = vl_gpt.gen_head(hidden_states[:, -1, :])
 
                 # ch: ------ #
@@ -274,21 +435,78 @@ def model_predict(args, vl_gpt, vl_chat_processor, action_tokenizer, statistic, 
                 img_embeds = vl_gpt.prepare_gen_img_embeds(next_token)
                 inputs_embeds = img_embeds.unsqueeze(dim=1)
 
-            dec = vl_gpt.gen_vision_model.decode_code(generated_tokens.to(dtype=torch.int), shape=[parallel_size, 8, img_size//patch_size, img_size//patch_size])
-            dec = dec.to(torch.float32).cpu().numpy().transpose(0, 2, 3, 1)
+            else:
+                if i == image_token_num_per_image:
+                    add_tokens = torch.tensor([vl_chat_processor.image_end_id]*parallel_size).to(device)
+                    add_embeds = vl_gpt.language_model.get_input_embeddings()(add_tokens).unsqueeze(1)
+                    inputs_embeds = torch.cat([inputs_embeds, add_embeds], dim=1)
 
-            dec = np.clip((dec + 1) / 2 * 255, 0, 255)
+                    outputs = vl_gpt.language_model.model(
+                        inputs_embeds=inputs_embeds, 
+                        image_indexes=torch.arange(0, inputs_embeds.shape[1]).to(device),
+                        action_indexes=torch.arange(0, 0).to(device),
+                        action_condition_len=action_condition_len,
+                        image_generation = args.image_generation,
+                        use_cache=True, 
+                        past_key_values=outputs.past_key_values
+                    )
+                else:
+                    outputs = vl_gpt.language_model.model(
+                        inputs_embeds=inputs_embeds, 
+                        image_indexes=torch.arange(0, 0).to(device),
+                        action_indexes=torch.arange(0, inputs_embeds.shape[1]).to(device),
+                        image_generation = args.image_generation,
+                        action_condition_len=action_condition_len,
+                        use_cache=True, 
+                        past_key_values=outputs.past_key_values
+                    )
 
-            visual_img = np.zeros((parallel_size, img_size, img_size, 3), dtype=np.uint8)
-            visual_img[:, :, :] = dec
+                hidden_states = outputs.last_hidden_state
+                # logits = vl_gpt.language_model.lm_head_action(hidden_states[:, -1, :])
+                logits = vl_gpt.language_model.lm_head(hidden_states[:, -1, :])
 
-            for i in range(parallel_size):
-                save_path = os.path.join(pre_image_dir, f'step_{step}.png')
-                PIL.Image.fromarray(visual_img[i]).save(save_path)
+                # ch: ------ #
+                # probs = torch.softmax(logits / temperature, dim=-1)
+                # next_token = torch.multinomial(probs, num_samples=1)
+                next_token = torch.argmax(logits, dim=-1, keepdim=True)
+                # ch: ------ #
 
+                generated_action_tokens[:, i-image_token_num_per_image] = next_token.squeeze(dim=-1)
+                next_token = next_token.view(-1)
+                # action_emb = vl_gpt.language_model.get_input_embeddings_action()(next_token)
+                action_emb = vl_gpt.language_model.get_input_embeddings()(next_token)
+                inputs_embeds = action_emb.unsqueeze(dim=1)
+
+        print(generated_action_tokens)
+        dec = vl_gpt.gen_vision_model.decode_code(generated_tokens.to(dtype=torch.int), shape=[parallel_size, 8, img_size//patch_size, img_size//patch_size])
+        dec = dec.to(torch.float32).cpu().numpy().transpose(0, 2, 3, 1)
+        dec = np.clip((dec + 1) / 2 * 255, 0, 255)
+        visual_img = np.zeros((parallel_size, img_size, img_size, 3), dtype=np.uint8)
+        visual_img[:, :, :] = dec
+        for i in range(parallel_size):
+            save_path = os.path.join(pre_image_dir, f'step_{step}.png')
+            PIL.Image.fromarray(visual_img[i]).save(save_path)
+
+        normalized_actions = action_tokenizer.decode_token_ids_to_actions(generated_action_tokens.cpu().numpy())
+        if normalized_actions.ndim == 1:
+            dim = len(normalized_actions)
+            if dim == 7 or dim == 14:
+                normalized_actions[6] = 0 if normalized_actions[6] < 0.5 else 1
+            if dim == 14:
+                normalized_actions[13] = 0 if normalized_actions[13] < 0.5 else 1
+        else:
+            dim = normalized_actions.shape[1]
+            if dim == 7 or dim == 14:
+                normalized_actions[:, 6] = (normalized_actions[:, 6] >= 0.5).astype(int)
+            if dim == 14:
+                normalized_actions[:, 13] = (normalized_actions[:, 13] >= 0.5).astype(int)
+        actions = np.where(
+            statistic['action_mask'],
+            0.5 * (normalized_actions + 1) * (statistic['action_max'] - statistic['action_min']) + statistic['action_min'],
+            normalized_actions,
+        )
         return actions
-
-
+    
 def main(args):
     # Report the arguments
     Logger.log_info(f'Running {colored(__file__, "red")} with arguments:')
@@ -300,7 +518,7 @@ def main(args):
     Logger.log_info(f'replay or predict: {args.replay_or_predict}')
     Logger.log_info(f'max steps: {args.max_steps}')
     Logger.log_info(f'cuda used: {args.cuda}')
-    cprint('-' * os.get_terminal_size().columns, 'cyan')
+    # cprint('-' * os.get_terminal_size().columns, 'cyan')
 
     action_mode = RLBenchActionMode.eepose_then_gripper_action_mode(absolute=True)
     obs_config = RLBenchObservationConfig.single_view_config(camera_name='front', image_size=(224, 224))
@@ -375,8 +593,6 @@ def main(args):
                 action = np.concatenate([sum_first_3_rows, last_row_last_4])
 
                 # print(action[3:6],robo_state[3:6])
-                # action[3:6] = unique_euler_xyz_rad(action[3:6])
-                # robo_state[3:6] = unique_euler_xyz_rad(robo_state[3:6])
                 # print(action[3:6],robo_state[3:6])
 
 
@@ -398,7 +614,6 @@ def main(args):
                 robot_state = obs_dict['robot_state']
                 robot_state = EEpose.pose_7DoF_to_6DoF(robot_state[7:14])
                 robot_state = np.concatenate([robot_state, np.array([gripper_open])]) if gripper_open != None else np.concatenate([robot_state, np.array([1])])
-                robot_state[3:6] = unique_euler_xyz_rad(robot_state[3:6])
                 cur_robot_state = robot_state if args.use_robot_state else None
 
                 if args.load_pointcloud:
@@ -406,7 +621,7 @@ def main(args):
                 else:
                     point_cloud=None
 
-                actions = model_predict(args, vl_gpt, vl_chat_processor, action_tokenizer, statistic, task_description, image, cur_robot_state, point_cloud, pre_image_dir, step = j)
+                actions = model_predict_mask_once_kvcache(args, vl_gpt, vl_chat_processor, action_tokenizer, statistic, task_description, image, cur_robot_state, point_cloud, pre_image_dir, step = j)
 
                 for action in actions:
                     action[:3] += obs_dict['robot_state'][7:10]

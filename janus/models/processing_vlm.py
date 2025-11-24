@@ -29,31 +29,6 @@ from janus.models.image_processing_vlm import VLMImageProcessor
 from janus.utils.conversation import get_conv_template
 import copy
 
-# def smart_tokenizer_and_embedding_resize(
-#     tokenizer: transformers.PreTrainedTokenizer,
-#     model: transformers.PreTrainedModel,
-# ):
-#     """Resize tokenizer and embedding.
-
-#     Note: This is the unoptimized version that may make your embedding size not be divisible by 64.
-#     """
-#     # num_new_tokens = tokenizer.add_special_tokens(special_tokens_dict)
-#     # model.resize_token_embeddings(len(tokenizer))
-
-#     num_new_tokens = tokenizer.add_special_tokens({"additional_special_tokens": ["<BOD>", "<EOD>"]})
-#     model.resize_token_embeddings(len(tokenizer), pad_to_multiple_of=64)
-#     if num_new_tokens > 0:
-#         input_embeddings = model.get_input_embeddings().weight.data
-#         output_embeddings = model.get_output_embeddings().weight.data
-
-#         input_embeddings_avg = input_embeddings[:-num_new_tokens].mean(
-#             dim=0, keepdim=True)
-#         output_embeddings_avg = output_embeddings[:-num_new_tokens].mean(
-#             dim=0, keepdim=True)
-
-#         input_embeddings[-num_new_tokens:] = input_embeddings_avg
-#         output_embeddings[-num_new_tokens:] = output_embeddings_avg
-
 class DictOutput(object):
     def keys(self):
         return self.__dict__.keys()
@@ -129,9 +104,10 @@ class VLChatProcessor(ProcessorMixin):
         image_id = self.tokenizer.vocab.get(image_tag)
         if image_id is None:
             special_tokens = [image_tag]
-            
         for i in range(256):
             special_tokens.append(f'<action_{i}>')
+
+        special_tokens.extend(["<|latent_start|>", "<|latent_pad|>", "<|latent_end|>"])
         special_tokens_dict = {"additional_special_tokens": special_tokens}
         self.num_add_tokens = self.tokenizer.add_special_tokens(special_tokens_dict)
         print(f"Add {self.num_add_tokens} spectial token to the tokenizer!!")
@@ -158,6 +134,36 @@ class VLChatProcessor(ProcessorMixin):
             ignore_id,
             **kwargs,
         )
+
+        # # === DEBUG: special tokens ===
+        # print("\n========== [DEBUG] Tokenizer Special Tokens ==========")
+        # print(f"Original vocab size: {self.original_tokenizer_len}")
+        # print(f"Added vocab size:    {len(self.tokenizer)}")
+        # print(f"Actually added {self.num_add_tokens} special tokens")
+
+        # all_specials = self.tokenizer.additional_special_tokens
+        # print("\nAll special tokens:")
+        # for i, tok in enumerate(all_specials):
+        #     tid = self.tokenizer.convert_tokens_to_ids(tok)
+        #     print(f"  {i:3d}: {tok:<25} -> id={tid}")
+
+        # critical_tokens = [
+        #     self.image_tag,
+        #     self.image_start_tag,
+        #     self.image_end_tag,
+        #     "<action_0>",
+        #     "<action_255>",
+        #     "<|latent_start|>",
+        #     "<|latent_pad|>",
+        #     "<|latent_end|>",
+        # ]
+        # print("\nCritical token existence check:")
+        # for t in critical_tokens:
+        #     tid = self.tokenizer.convert_tokens_to_ids(t)
+        #     print(f"  {t:<25} -> id={tid}")
+
+        # print("=======================================================\n")
+        # input("tokenizer check done, press any key to continue")
 
     def new_chat_template(self):
         conv = get_conv_template(self.sft_format)

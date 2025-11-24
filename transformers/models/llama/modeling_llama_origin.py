@@ -176,20 +176,6 @@ def eager_attention_forward(
 ):
     key_states = repeat_kv(key, module.num_key_value_groups)
     value_states = repeat_kv(value, module.num_key_value_groups)
-    # print(key_states.shape, query.shape, value_states.shape, attention_mask.shape)
-
-    ##### ---------ch changed----------- #####
-    batch_size, num_heads, q_length, head_dim = query.shape
-    kv_length = key.shape[-2]
-    if attention_mask is None:
-        query_positions = torch.arange(q_length, device=query.device).view(1, 1, q_length, 1)
-        key_positions = torch.arange(kv_length, device=key.device).view(1, 1, 1, kv_length)
-        causal_mask = query_positions >= key_positions
-        attention_mask = torch.zeros_like(causal_mask, dtype=query.dtype)
-        attention_mask = attention_mask.masked_fill(~causal_mask, float('-inf'))
-        attention_mask = attention_mask.expand(batch_size, num_heads, q_length, kv_length)
-
-    ##### ---------ch changed----------- #####
 
     attn_weights = torch.matmul(query, key_states.transpose(2, 3)) * scaling
     if attention_mask is not None:
@@ -230,20 +216,6 @@ class LlamaAttention(nn.Module):
             config.num_attention_heads * self.head_dim, config.hidden_size, bias=config.attention_bias
         )
 
-
-        self.q_proj_action = nn.Linear(
-            config.hidden_size, config.num_attention_heads * self.head_dim, bias=config.attention_bias
-        )
-        self.k_proj_action = nn.Linear(
-            config.hidden_size, config.num_key_value_heads * self.head_dim, bias=config.attention_bias
-        )
-        self.v_proj_action = nn.Linear(
-            config.hidden_size, config.num_key_value_heads * self.head_dim, bias=config.attention_bias
-        )
-        self.o_proj_action = nn.Linear(
-            config.num_attention_heads * self.head_dim, config.hidden_size, bias=config.attention_bias
-        )
-
     def forward(
         self,
         hidden_states: torch.Tensor,
@@ -254,29 +226,11 @@ class LlamaAttention(nn.Module):
         **kwargs: Unpack[FlashAttentionKwargs],
     ) -> tuple[torch.Tensor, Optional[torch.Tensor], Optional[tuple[torch.Tensor]]]:
         input_shape = hidden_states.shape[:-1]
+        hidden_shape = (*input_shape, -1, self.head_dim)
 
-        assert 'latent_indexes' in kwargs or 'action_indexes' in kwargs
-        latent_indexes = kwargs['latent_indexes']
-        action_indexes = kwargs['action_indexes']
-        assert len(action_indexes) + len(latent_indexes) == hidden_states.shape[1]
-
-        latent_hidden = hidden_states[:, latent_indexes]
-        action_hidden = hidden_states[:, action_indexes]
-
-        query_states = torch.cat([
-            self.q_proj(latent_hidden),
-            self.q_proj_action(action_hidden)
-        ], dim=1).view(hidden_states.size(0), -1, hidden_states.shape[-1]//self.head_dim, self.head_dim).transpose(1, 2)
-
-        key_states = torch.cat([
-            self.k_proj(latent_hidden),
-            self.k_proj_action(action_hidden)
-        ], dim=1).view(hidden_states.size(0), -1, hidden_states.shape[-1]//self.head_dim, self.head_dim).transpose(1, 2)
-
-        value_states = torch.cat([
-            self.v_proj(latent_hidden),
-            self.v_proj_action(action_hidden)
-        ], dim=1).view(hidden_states.size(0), -1, hidden_states.shape[-1]//self.head_dim, self.head_dim).transpose(1, 2)
+        query_states = self.q_proj(hidden_states).view(hidden_shape).transpose(1, 2)
+        key_states = self.k_proj(hidden_states).view(hidden_shape).transpose(1, 2)
+        value_states = self.v_proj(hidden_states).view(hidden_shape).transpose(1, 2)
 
         cos, sin = position_embeddings
         query_states, key_states = apply_rotary_pos_emb(query_states, key_states, cos, sin)
@@ -300,15 +254,9 @@ class LlamaAttention(nn.Module):
             scaling=self.scaling,
             **kwargs,
         )
+
         attn_output = attn_output.reshape(*input_shape, -1).contiguous()
-
-        latent_hidden = attn_output[:, latent_indexes]
-        action_hidden = attn_output[:, action_indexes]
-        attn_output = torch.cat([
-            self.o_proj(latent_hidden),
-            self.o_proj_action(action_hidden)
-        ], dim=1)
-
+        attn_output = self.o_proj(attn_output)
         return attn_output, attn_weights
 
 
@@ -316,16 +264,12 @@ class LlamaDecoderLayer(GradientCheckpointingLayer):
     def __init__(self, config: LlamaConfig, layer_idx: int):
         super().__init__()
         self.hidden_size = config.hidden_size
-        self.layer_idx = layer_idx
+
         self.self_attn = LlamaAttention(config=config, layer_idx=layer_idx)
 
         self.mlp = LlamaMLP(config)
         self.input_layernorm = LlamaRMSNorm(config.hidden_size, eps=config.rms_norm_eps)
         self.post_attention_layernorm = LlamaRMSNorm(config.hidden_size, eps=config.rms_norm_eps)
-
-        self.mlp_action = LlamaMLP(config)
-        self.input_layernorm_action = LlamaRMSNorm(config.hidden_size, eps=config.rms_norm_eps)
-        self.post_attention_layernorm_action = LlamaRMSNorm(config.hidden_size, eps=config.rms_norm_eps)
 
     def forward(
         self,
@@ -340,19 +284,7 @@ class LlamaDecoderLayer(GradientCheckpointingLayer):
         **kwargs: Unpack[FlashAttentionKwargs],
     ) -> tuple[torch.FloatTensor, Optional[tuple[torch.FloatTensor, torch.FloatTensor]]]:
         residual = hidden_states
-
-        assert 'latent_indexes' in kwargs or 'action_indexes' in kwargs
-        latent_indexes = kwargs['latent_indexes']
-        action_indexes = kwargs['action_indexes']
-        assert len(action_indexes) + len(latent_indexes) == hidden_states.shape[1]
-
-        latent_hidden = hidden_states[:, latent_indexes]
-        action_hidden = hidden_states[:, action_indexes]
-
-        hidden_states = torch.cat([
-            self.input_layernorm(latent_hidden),
-            self.input_layernorm_action(action_hidden)
-        ], dim=1)
+        hidden_states = self.input_layernorm(hidden_states)
 
         # Self Attention
         hidden_states, self_attn_weights = self.self_attn(
@@ -370,14 +302,8 @@ class LlamaDecoderLayer(GradientCheckpointingLayer):
 
         # Fully Connected
         residual = hidden_states
-        
-        latent_hidden = hidden_states[:, latent_indexes]
-        action_hidden = hidden_states[:, action_indexes]
-        hidden_states = torch.cat([
-            self.mlp(self.post_attention_layernorm(latent_hidden)),
-            self.mlp_action(self.post_attention_layernorm_action(action_hidden))
-        ], dim=1)
-
+        hidden_states = self.post_attention_layernorm(hidden_states)
+        hidden_states = self.mlp(hidden_states)
         hidden_states = residual + hidden_states
 
         outputs = (hidden_states,)
@@ -425,13 +351,10 @@ class LlamaModel(LlamaPreTrainedModel):
         self.vocab_size = config.vocab_size
 
         self.embed_tokens = nn.Embedding(config.vocab_size, config.hidden_size, self.padding_idx)
-        self.embed_tokens_action = nn.Embedding(259, config.hidden_size, self.padding_idx)
-
         self.layers = nn.ModuleList(
             [LlamaDecoderLayer(config, layer_idx) for layer_idx in range(config.num_hidden_layers)]
         )
         self.norm = LlamaRMSNorm(config.hidden_size, eps=config.rms_norm_eps)
-        self.norm_action = LlamaRMSNorm(config.hidden_size, eps=config.rms_norm_eps)
         self.rotary_emb = LlamaRotaryEmbedding(config=config)
         self.gradient_checkpointing = False
 
@@ -443,12 +366,6 @@ class LlamaModel(LlamaPreTrainedModel):
 
     def set_input_embeddings(self, value):
         self.embed_tokens = value
-
-    def get_input_embeddings_action(self):
-        return self.embed_tokens_action
-
-    def set_input_embeddings_action(self, value):
-        self.embed_tokens_action = value
 
     @can_return_tuple
     @auto_docstring
@@ -495,12 +412,10 @@ class LlamaModel(LlamaPreTrainedModel):
             cache_position = torch.arange(
                 past_seen_tokens, past_seen_tokens + inputs_embeds.shape[1], device=inputs_embeds.device
             )
-        
-        # print(cache_position)
 
         if position_ids is None:
             position_ids = cache_position.unsqueeze(0)
-        
+
         causal_mask = create_causal_mask(
             config=self.config,
             input_embeds=inputs_embeds,
@@ -509,7 +424,7 @@ class LlamaModel(LlamaPreTrainedModel):
             past_key_values=past_key_values,
             position_ids=position_ids,
         )
-        
+
         hidden_states = inputs_embeds
 
         # create position embeddings to be shared across the decoder layers
@@ -540,16 +455,7 @@ class LlamaModel(LlamaPreTrainedModel):
             if output_attentions:
                 all_self_attns += (layer_outputs[1],)
 
-        assert 'latent_indexes' in flash_attn_kwargs or 'action_indexes' in flash_attn_kwargs
-        latent_indexes = flash_attn_kwargs['latent_indexes']
-        action_indexes = flash_attn_kwargs['action_indexes']
-
-        latent_hidden = hidden_states[:, latent_indexes]
-        action_hidden = hidden_states[:, action_indexes]
-        hidden_states = torch.cat([
-            self.norm(latent_hidden),
-            self.norm_action(action_hidden)
-        ], dim=1)
+        hidden_states = self.norm(hidden_states)
 
         # add hidden states from the last decoder layer
         if output_hidden_states:
@@ -577,7 +483,6 @@ class LlamaForCausalLM(LlamaPreTrainedModel, GenerationMixin):
         self.model = LlamaModel(config)
         self.vocab_size = config.vocab_size
         self.lm_head = nn.Linear(config.hidden_size, config.vocab_size, bias=False)
-        self.lm_head_action = nn.Linear(config.hidden_size, 259, bias=False)
         
         # Initialize weights and apply final processing
         self.post_init()
@@ -593,18 +498,6 @@ class LlamaForCausalLM(LlamaPreTrainedModel, GenerationMixin):
 
     def set_output_embeddings(self, new_embeddings):
         self.lm_head = new_embeddings
-
-    def get_input_embeddings_action(self):
-        return self.model.embed_tokens_action
-
-    def set_input_embeddings_action(self, value):
-        self.model.embed_tokens_action = value
-
-    def get_output_embeddings(self):
-        return self.lm_head_action
-
-    def set_output_embeddings(self, new_embeddings):
-        self.lm_head_action = new_embeddings
 
     def set_decoder(self, decoder):
         self.model = decoder

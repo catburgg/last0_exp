@@ -1,164 +1,119 @@
-import numpy as np
-from PIL import Image
-import json
 import os
-import re
-from scipy.spatial.transform import Rotation as R
+import json
+import time
+import numpy as np
+from tqdm import tqdm
+from concurrent.futures import ThreadPoolExecutor
 
-def unique_euler_xyz_rad(angles, range_style="2pi"):
-    """
-    输入: 欧拉角 (xyz 顺序)，弧度制 (任意范围, 可正可负, 可超过 2π)
-    输出: 欧拉角 (xyz 顺序)，弧度制，严格唯一表示
 
-    参数:
-        precision: 保留小数位数
-        range_style: "negpi" -> (-π, π], "2pi" -> [0, 2π)
-    """
-    # 输入是弧度
-    rot = R.from_euler('xyz', angles, degrees=False)
+# def process_single_file(file, data_root):
+#     file_path = os.path.join(data_root, file)
+#     episode = np.load(file_path, allow_pickle=True)
+#     if len(episode)<=5: 
+#         return None
+#     actions = np.stack([step["action"][0] for step in episode[:-1]])
+#     L = len(episode) - 1
+#     json_items = [{"idx": idx, "npy": file} for idx in range(L)]
+#     return actions, json_items, L
+
+
+def process_single_file(file, data_root):
+    file_path = os.path.join(data_root, file)
+    episode = np.load(file_path, allow_pickle=True)
     
-    # 转回 xyz (弧度制)
-    euler = rot.as_euler('xyz', degrees=False)
-    
-    # wrap 到 (-π, π]
-    euler = (euler + np.pi) % (2 * np.pi) - np.pi
-    
-    # 约束: y ∈ [-π/2, π/2]
-    if euler[1] > np.pi/2:
-        euler[1] = np.pi - euler[1]
-        euler[0] += np.pi
-        euler[2] += np.pi
-    elif euler[1] < -np.pi/2:
-        euler[1] = -np.pi - euler[1]
-        euler[0] += np.pi
-        euler[2] += np.pi
-    
-    # 再 wrap 一次
-    euler = (euler + np.pi) % (2 * np.pi) - np.pi
-    
-    # 如果要求 [0, 2π)，再转换
-    if range_style == "2pi":
-        euler = euler % (2 * np.pi)
-    
-    return euler
+    # 太短的 episode 直接跳过
+    if len(episode) <= 5:
+        return None
 
-def npy_2_jsonl(data_root, jsonl_filename, task_lists):
-    episode_num = 0
-
-    with open(jsonl_filename, 'w') as f:
-        for task in task_lists:
-            print(f'Processing task: {task}')
-            for file in os.listdir(f'{data_root}/{task}'):
-                if not file.endswith('.npy'): 
-                    continue
-
-                print('generating:', file, end=' ')
-                episode = np.load(f'{data_root}/{task}/{file}', allow_pickle=True)
-                episode_num += 1
-
-                episode_length = len(episode)
-                print('episode_length:', episode_length)
-
-                for i in range(episode_length-1):
-                    episode_data = {
-                        'idx': i,
-                        'npy': f'{task}/{file}',
-                    }
-                    f.write(json.dumps(episode_data) + '\n')
-    return episode_num
-
-def jsonl_2_json(input_file, output_file):
-    with open(input_file, 'r') as f:
-        lines = f.readlines()
-
-    output_data = []
-    for line in lines:
-        item = json.loads(line)
-        new_item = {
-            "idx": item["idx"],
-            "npy": item['npy'],
-        }
-        output_data.append(new_item)
-    
-    with open(output_file, 'w') as f:
-        json.dump(output_data, f)
-
-
-def cal_stats(data_root, jsonl_filename, episode_num):
-    actions = []
-
-    with open(jsonl_filename, 'r') as f:
-        for line in f:
-            data = json.loads(line)
-            episode = np.load(f"{data_root}/{data['npy']}", allow_pickle=True)
-
-            action = episode[data['idx']]['action']
-            actions_7d = [action[i*7:(i+1)*7] for i in range(8)]
-            delta_positions = [action[:3] for action in actions_7d]
-            abs_rots = [action[3:6] for action in actions_7d]
-            grippers = [action[-1] for action in actions_7d]
-            delta_position_total = np.sum(delta_positions, axis=0)
-            action = np.concatenate([delta_position_total, abs_rots[-1], [grippers[-1]]])
-            action[3:6] = unique_euler_xyz_rad(action[3:6])
-
-            actions.append(action)
-
-    actions = np.array(actions)
-
-    def calculate_stats(data, mask=None):
-        if mask is None:
-            mask = [True] * data.shape[1]
+    actions_list = []
+    for step in episode[:-1]:
+        # 检查 action 长度必须是 1
+        if len(step["action"]) != 1 or len(step["action"][0]) != 7:
+            return None
         
-        stats = {
-            'mean': np.mean(data, axis=0).tolist(),
-            'std': np.std(data, axis=0).tolist(),
-            'max': np.max(data, axis=0).tolist(),
-            'min': np.min(data, axis=0).tolist(),
-            'q01': np.quantile(data, 0.01, axis=0).tolist(),
-            'q99': np.quantile(data, 0.99, axis=0).tolist(),
-            'mask': mask,
-        }
-        return stats
+        action = step["action"][0]
+        # 如果 action 有任何元素 > 1，则丢弃整个 episode
+        if np.any(action > 1):
+            return None
+        
+        actions_list.append(action)
 
-    action_mask = [True, True, True, True, True, True, False]
-    action_stats = calculate_stats(actions, action_mask)
+    actions = np.stack(actions_list)
+    L = len(episode) - 1
+    json_items = [{"idx": idx, "npy": file} for idx in range(L)]
+    return actions, json_items, L
 
+
+
+def process_npy_and_save(data_root, jsonl_path, json_path, stats_path, num_workers=16):
+    os.makedirs(os.path.dirname(jsonl_path), exist_ok=True)
+    os.makedirs(os.path.dirname(json_path), exist_ok=True)
+    npy_files = [f for f in os.listdir(data_root) if f.endswith(".npy")]
+    episode_num = len(npy_files)
+    print(f"Found {episode_num} npy files.")
+
+    all_actions = []
+    total_transitions = 0
+    t0 = time.time()
+    valid_num = 0
+    with open(jsonl_path, "w") as jsonl_file:
+        json_items = []
+        with ThreadPoolExecutor(max_workers=num_workers) as executor:
+            for result in tqdm(executor.map(lambda f: process_single_file(f, data_root), npy_files),
+                            total=len(npy_files), desc="Processing npy", ncols=100):
+                if result is None:
+                    continue
+                actions, items, L = result
+
+                all_actions.append(actions)
+                total_transitions += L
+                valid_num += 1
+
+                for item in items:
+                    jsonl_file.write(json.dumps(item) + "\n")
+                json_items.extend(items)
+    print(f"Saved jsonl index to {jsonl_path}")
+
+
+    # 直接用收集好的 json_items 写 json
+    with open(json_path, "w") as f:
+        json.dump(json_items, f)
+    print(f"Saved json to {json_path}")
+
+
+    # 计算统计信息
+    all_actions = np.vstack(all_actions)
+    print(f"Loaded {total_transitions} transitions in {(time.time()-t0):.2f}s, start computing statistics...")
+    stats = {
+        'mean': np.mean(all_actions, axis=0).tolist(),
+        'std': np.std(all_actions, axis=0).tolist(),
+        'max': np.max(all_actions, axis=0).tolist(),
+        'min': np.min(all_actions, axis=0).tolist(),
+        'q01': np.quantile(all_actions, 0.01, axis=0).tolist(),
+        'q99': np.quantile(all_actions, 0.99, axis=0).tolist(),
+        'mask': [True, True, True, True, True, True, False],
+    }
     result = {
-        "rlbench": {
-            "action": action_stats,
-            "num_transitions": len(actions),
+        "oxe_pretrain": {
+            "action": stats,
+            "num_transitions": total_transitions,
             "num_trajectories": episode_num,
+            "valid_traj": valid_num,
         }
     }
-
-    output_path = jsonl_filename.replace("train.jsonl", "train_statistics.json")
-    with open(output_path, 'w') as f:
+    with open(stats_path, "w") as f:
         json.dump(result, f, indent=2)
 
-    print(f"Statistics have been saved to {output_path}")
+
+    print(f"Statistics have been saved to {stats_path}")
+    print(f"Processed {valid_num}/{episode_num} valid npy files.")
 
 
 
-######## ---------main---------- #########
-
-data_root = "/gpfs/0607-cluster/chenhao/data/rlbench/keyframe_fast_slow_chunk8_addlast_0806/for_rlds"
-json_save_root = "/gpfs/0607-cluster/chenhao/DoubleRL-VLA/training_data/json"
-jsonl_filename = f'{json_save_root}/4tasks_train.jsonl'
-json_file = f'{json_save_root}/4tasks_train.json'
-
-task_lists = [
-  'close_box',
-#   'close_fridge',
-  'close_laptop_lid',
-  'phone_on_base',
-#   'place_wine_at_rack_location',
-  'sweep_to_dustpan',
-#   'take_frame_off_hanger',
-#   'take_umbrella_out_of_umbrella_stand',
-#   'toilet_seat_down',
-#   'water_plants'
-]
-
-episode_num = npy_2_jsonl(data_root, jsonl_filename, task_lists)
-cal_stats(data_root, jsonl_filename, episode_num)
-jsonl_2_json(jsonl_filename, json_file)
+if __name__ == "__main__":
+    data_root = "/media/realworld_data/rtx_npy_0912"
+    json_save_root = "/media/chenhao/DoubleRL-VLA/training_data/json"
+    jsonl_filename = os.path.join(json_save_root, "oxe_pretrain.jsonl")
+    json_file = os.path.join(json_save_root, "oxe_pretrain.json")
+    stats_file = os.path.join(json_save_root, "oxe_pretrain_statistics.json")
+    process_npy_and_save(data_root, jsonl_filename, json_file, stats_file, num_workers=16)

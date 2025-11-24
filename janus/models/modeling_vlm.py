@@ -284,7 +284,6 @@ class MultiModalityCausalLM(MultiModalityPreTrainedModel):
         predicted_noise = self.final_layer(hidden_states)[:, -noisy_actions.shape[1]:, :]
         return outputs, predicted_noise
 
-        
 
     def initialize_weights(self):
         if self.diff:

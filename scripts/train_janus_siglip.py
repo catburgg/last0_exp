@@ -5,26 +5,27 @@ import logging
 import argparse
 import random
 import shutil
+import math
+import wandb
+import PIL.Image
+import numpy as np
+import time
+
 from typing import List, Dict, Any
 from scipy.spatial.transform import Rotation as R
-
-import wandb
 from tqdm import tqdm
 import torch.nn.functional as F
 import torch.distributed as dist
 from torch.utils.data import Dataset, DataLoader
+from torch.optim.lr_scheduler import LambdaLR
 from accelerate import Accelerator
+from einops import rearrange
 from transformers import (
     set_seed,
 )
-
-from janus.models import VLChatProcessor, ActionTokenizer
 from transformers import AutoModelForCausalLM
-import PIL.Image
+from janus.models import VLChatProcessor, ActionTokenizer
 
-from torch.optim.lr_scheduler import LambdaLR
-import math
-import numpy as np
 
 logger = logging.getLogger(__name__)
 logging.basicConfig(level='INFO')
@@ -67,88 +68,83 @@ def get_learning_rate(step, initial_lr, num_warmup_steps, num_training_steps, mi
 
 
 def create_component_indexes(seq_len, action_len=7):
-    image_indexes = torch.arange(0, seq_len - action_len)
+    latent_indexes = torch.arange(0, seq_len - action_len)
     action_indexes = torch.arange(seq_len - action_len, seq_len)
-    return image_indexes, action_indexes
+    return latent_indexes, action_indexes
 
 
 class TrainingMetrics:
     def __init__(self, device):
         self.n_step = 0
-        self.image_right = torch.Tensor([0]).to(device=device)
         self.action_right = torch.Tensor([0]).to(device=device)
-        self.image_total = torch.Tensor([0]).to(device=device)
         self.action_total = torch.Tensor([0]).to(device=device)
-        self.image_loss = torch.Tensor([0]).to(device=device)
         self.action_loss = torch.Tensor([0]).to(device=device)
+        self.sim_loss = torch.Tensor([0]).to(device=device)
         self.world_size = dist.get_world_size()
 
-    def __call__(self, has_img, image_logits, image_labels, image_loss, action_logits, action_labels, action_loss):
-        if has_img:
-            return self.update(image_logits, image_labels, image_loss, action_logits, action_labels, action_loss)
+    def __call__(self, has_latent, action_logits, action_labels, action_loss, sim_loss):
+        if has_latent:
+            return self.update(action_logits, action_labels, action_loss, sim_loss)
         else:
-            return self.update_action(action_logits, action_labels, action_loss)
+            return self.update_action(action_logits, action_labels, action_loss, sim_loss)
 
-    def update(self, image_logits, image_labels, image_loss, action_logits, action_labels, action_loss):
+    def update(self, action_logits, action_labels, action_loss, sim_loss):
         self.n_step += 1
         with torch.no_grad():
-            shift_image_preds = image_logits.argmax(dim=-1) # logits[..., :-1, :].argmax(dim=-1)
-            shift_image_labels = image_labels # labels[..., 1:]
-            self.image_right += (shift_image_preds == shift_image_labels).masked_fill(shift_image_labels.eq(-100), 0).sum().item()
-            self.image_total += (shift_image_labels != -100).sum().item()
-            self.image_loss += image_loss.item()
+            shift_action_preds = action_logits.argmax(dim=-1) # logits[..., :-1, :].argmax(dim=-1)
+            shift_action_labels = action_labels # labels[..., 1:]
+            # print("label", shift_action_labels[0])
+            # print("pred", shift_action_preds[0])
+            # print()
+            self.action_right += (shift_action_preds == shift_action_labels).masked_fill(shift_action_labels.eq(-100), 0).sum().item()
+            self.action_total += (shift_action_labels != -100).sum().item()
+            self.action_loss += action_loss.item()
+            self.sim_loss += sim_loss.item()
 
+    def update_action(self, action_logits, action_labels, action_loss, sim_loss):
+        self.n_step += 1
+        with torch.no_grad():
             shift_action_preds = action_logits.argmax(dim=-1) # logits[..., :-1, :].argmax(dim=-1)
             shift_action_labels = action_labels # labels[..., 1:]
             self.action_right += (shift_action_preds == shift_action_labels).masked_fill(shift_action_labels.eq(-100), 0).sum().item()
             self.action_total += (shift_action_labels != -100).sum().item()
             self.action_loss += action_loss.item()
-
-    def update_action(self, action_logits, action_labels, action_loss):
-        self.n_step += 1
-        with torch.no_grad():
-            shift_action_preds = action_logits.argmax(dim=-1) # logits[..., :-1, :].argmax(dim=-1)
-            shift_action_labels = action_labels # labels[..., 1:]
-            self.action_right += (shift_action_preds == shift_action_labels).masked_fill(shift_action_labels.eq(-100), 0).sum().item()
-            self.action_total += (shift_action_labels != -100).sum().item()
-            self.action_loss += action_loss.item()
+            self.sim_loss += sim_loss.item()
 
     def get_metric(self, reset=True):
-        dist.all_reduce(self.image_right, op=torch.distributed.ReduceOp.SUM)
-        dist.all_reduce(self.image_total, op=torch.distributed.ReduceOp.SUM)
-        dist.all_reduce(self.image_loss, op=torch.distributed.ReduceOp.SUM)
         dist.all_reduce(self.action_right, op=torch.distributed.ReduceOp.SUM)
         dist.all_reduce(self.action_total, op=torch.distributed.ReduceOp.SUM)
         dist.all_reduce(self.action_loss, op=torch.distributed.ReduceOp.SUM)
+        dist.all_reduce(self.sim_loss, op=torch.distributed.ReduceOp.SUM)
 
-        image_acc = (self.image_right / self.image_total).item()
-        image_loss = self.image_loss.item() / (self.world_size * self.n_step)
         action_acc = (self.action_right / self.action_total).item()
         action_loss = self.action_loss.item() / (self.world_size * self.n_step)
+        sim_loss = self.sim_loss.item() / (self.world_size * self.n_step)
 
         if reset:
             self.n_step = 0
-            self.image_right.fill_(0)
-            self.image_total.fill_(0)
-            self.image_loss.fill_(0)
             self.action_right.fill_(0)
             self.action_total.fill_(0)
             self.action_loss.fill_(0)
-        return image_acc, image_loss, action_acc, action_loss
+            self.sim_loss.fill_(0)
+        return action_acc, action_loss, sim_loss
 
     def get_metric_action(self, reset=True):
         dist.all_reduce(self.action_right, op=torch.distributed.ReduceOp.SUM)
         dist.all_reduce(self.action_total, op=torch.distributed.ReduceOp.SUM)
         dist.all_reduce(self.action_loss, op=torch.distributed.ReduceOp.SUM)
+        dist.all_reduce(self.sim_loss, op=torch.distributed.ReduceOp.SUM)
         action_acc = (self.action_right / self.action_total).item()
         action_loss = self.action_loss.item() / (self.world_size * self.n_step)
+        sim_loss = self.sim_loss.item() / (self.world_size * self.n_step)   
 
         if reset:
             self.n_step = 0
             self.action_right.fill_(0)
             self.action_total.fill_(0)
             self.action_loss.fill_(0)
-        return 0, 0, action_acc, action_loss
+            self.sim_loss.fill_(0)
+        return 0, 0, action_acc, action_loss, sim_loss
 
 
 class SftDataset(Dataset):
@@ -156,7 +152,7 @@ class SftDataset(Dataset):
         self.config = config
         self.processor = processor
         self.tokenizer = processor.tokenizer
-        self.action_tokenizer = ActionTokenizer(self.tokenizer)
+        self.action_tokenizer = ActionTokenizer(self.tokenizer, need_to_sub=3) # 3 for latent spetial tokens
         self.accelerator = accelerator
         self.image_len = 576
         with open(config.data_path,'r') as f:
@@ -190,19 +186,23 @@ class SftDataset(Dataset):
         return images_outputs['pixel_values']
 
     def collate_fn(self, batch: List[Dict[str, torch.Tensor]]) -> Dict[str, torch.Tensor]:
-        gen_images = [os.path.join(self.img_dir,x['output_image']) for x in batch]
         input_images = sum([x['input_image'] for x in batch if 'input_image' in x],[])
         input_images = [os.path.join(self.img_dir,x) for x in input_images]
 
-        # Get codebook
-        pixel_values = self.process_image(gen_images).to(torch.bfloat16)
-        input_pixel_values = self.process_image(input_images).to(torch.bfloat16) if len(input_images) > 0 else None
+        if self.config.use_latent:
+            latent_images = [os.path.join(self.img_dir, x['output_image']) for x in batch]
+            latent_pixel_values = self.process_image(latent_images).to(torch.bfloat16) if len(latent_images) > 0 else None
+        else:
+            latent_pixel_values = None
 
-        input_img_tokens = self.processor.image_start_tag + self.processor.pad_tag*self.processor.num_image_tokens +self.processor.image_end_tag
-        output_img_tokens = self.processor.image_start_tag + self.processor.pad_tag*self.processor.num_image_tokens +self.processor.image_end_tag if self.config.image_generation else self.processor.image_end_tag
+        input_img_tokens = self.processor.image_start_tag + self.processor.image_tag*self.processor.num_image_tokens +self.processor.image_end_tag
+
+        latent_start_str = "<|latent_start|>"
+        latent_pad_str = "<|latent_pad|>" * self.config.latent_size
+        latent_end_str = "<|latent_end|>"
 
         pre_data = []
-        action_ids = []
+
         for x in batch:
             img_len = len(x['input_image']) if 'input_image' in x and len(x['input_image']) > 0 else 0
 
@@ -214,7 +214,6 @@ class SftDataset(Dataset):
             )
             action_tokens = ""
             action_tokens += self.action_tokenizer(normalized_action)
-            # action_ids.append(torch.LongTensor(self.action_tokenizer(normalized_action)))
 
             state_tokens = ""
             if self.config.robot_state:
@@ -226,12 +225,11 @@ class SftDataset(Dataset):
                 )
                 state_tokens += self.action_tokenizer(normalized_state)
 
-            prompts = input_img_tokens * img_len + x['input_prompt'] + state_tokens + output_img_tokens + action_tokens
-            # prompts = input_img_tokens * img_len + x['input_prompt'] + state_tokens + output_img_tokens
+            latent_str = latent_start_str + latent_pad_str + latent_end_str if self.config.use_latent else ""
+            prompts = input_img_tokens * img_len + x['input_prompt'] + state_tokens + latent_str + action_tokens
 
             conversation = [
                 {"role": "<|User|>","content": prompts},
-                # {"role": "<|Assistant|>", "content": ""}
             ]
 
             pre_format = self.processor.apply_sft_template_for_multi_turn_prompts(
@@ -249,17 +247,25 @@ class SftDataset(Dataset):
                 num_image_tokens = []
             
             input_ids = torch.LongTensor(self.processor.tokenizer.encode(sft_format))
-            pre_data.append(VLChatProcessorOutput(sft_format=sft_format, pixel_values=encoder_pixel_values, input_ids=input_ids, num_image_tokens=num_image_tokens))
+            pre_data.append(
+                VLChatProcessorOutput(
+                    sft_format=sft_format, 
+                    pixel_values=encoder_pixel_values, 
+                    input_ids=input_ids, 
+                    num_image_tokens=num_image_tokens
+                )
+            )
 
         if len(pre_data) > 0:
             prepare_inputs = self.processor.batchify(pre_data)
-        # action_ids = torch.stack(action_ids, dim=0)
+
         return {
-            # "action_ids": action_ids,
             "input_ids": prepare_inputs.input_ids,
-            "pixel_values": pixel_values,
-            "input_pixel_values": input_pixel_values,
-            "attention_mask": prepare_inputs.attention_mask
+            "encoder_pixel_values": prepare_inputs.pixel_values.to(torch.bfloat16),
+            "latent_pixel_values": latent_pixel_values,
+            "attention_mask": prepare_inputs.attention_mask,
+            "images_seq_mask": prepare_inputs['images_seq_mask'],
+            "images_emb_mask": prepare_inputs['images_emb_mask'],
         }
 
 
@@ -316,7 +322,6 @@ def train(args: argparse.Namespace) -> None:
             name=args.run_name,
             config=args,
             dir=args.log_dir,
-            mode="online"
         )
 
     accelerator.state.deepspeed_plugin.deepspeed_config['train_micro_batch_size_per_gpu'] = args.train_bsz_per_gpu
@@ -340,19 +345,19 @@ def train(args: argparse.Namespace) -> None:
 
     for name, param in model.named_parameters():
         if '_action' in name:
-            if args.load_action_from_image and name.endswith('.weight'):
-                if 'embed_tokens' in name:
+            if args.load_action_from_latent and name.endswith('.weight'):
+                if 'embed_tokens' in name: # actually not used
                     base_name = name.replace('_action', '')
                     base_embed_weight = model.state_dict()[base_name]
-                    last_256_tokens = base_embed_weight[-256:]
-                    param.data.copy_(last_256_tokens)
-                    accelerator.print(f"Initialized {name} with last 256 tokens from embed_tokens")
-                elif 'lm_head' in name:
+                    last_259_tokens = base_embed_weight[-259:] # 259: 256 action tokens + 3 latent tokens
+                    param.data.copy_(last_259_tokens)
+                    accelerator.print(f"Initialized {name} with last 259 tokens from embed_tokens")
+                elif 'lm_head' in name: # actually not used
                     base_name = name.replace('_action', '')
                     base_embed_weight = model.state_dict()[base_name]
-                    last_256_tokens = base_embed_weight[-256:]
-                    param.data.copy_(last_256_tokens)
-                    accelerator.print(f"Initialized {name} with last 256 tokens from embed_tokens")
+                    last_259_tokens = base_embed_weight[-259:]
+                    param.data.copy_(last_259_tokens)
+                    accelerator.print(f"Initialized {name} with last 259 tokens from embed_tokens")
                 else:
                     base_name = name.replace('_action', '')
                     if base_name in model.state_dict():
@@ -360,8 +365,11 @@ def train(args: argparse.Namespace) -> None:
                         accelerator.print(f"Initialized {name} from {base_name}")
             param.requires_grad = True
         else:
-            if args.freeze_image:
-                param.requires_grad = False
+            if args.freeze_latent:
+                if 'lm_head' in name or 'embed_tokens' in name: # important!: action also need lm_head to decode
+                    param.requires_grad = True
+                else:
+                    param.requires_grad = False
             else:
                 if any(name.startswith(prefix) for prefix in ["vision_model", "aligner", "gen_vision_model"]):
                     param.requires_grad = False
@@ -372,13 +380,13 @@ def train(args: argparse.Namespace) -> None:
     trainable_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
     non_trainable_params = total_params - trainable_params
 
-    accelerator.print(f"Freeze image: {args.freeze_image}")
-    accelerator.print(f"Load action from image: {args.load_action_from_image}")
+    accelerator.print(f"Freeze latent: {args.freeze_latent}")
+    accelerator.print(f"Load action from latent: {args.load_action_from_latent}")
     accelerator.print(f"Total parameters: {total_params/1e9:.2f}B")
     accelerator.print(f"Trainable parameters: {trainable_params/1e9:.2f}B")
     accelerator.print(f"Non-trainable parameters: {non_trainable_params/1e9:.2f}B")
     accelerator.print(f"Trainable ratio: {trainable_params/total_params*100:.2f}%")
-    if args.freeze_image:
+    if args.freeze_latent:
         accelerator.print("Freeze strategy: Training only parameters with '_action' in name")
     else:
         accelerator.print("Freeze strategy: Freezing only vision-related parameters (vision_model, aligner, gen_vision_model)")
@@ -422,88 +430,177 @@ def train(args: argparse.Namespace) -> None:
 
         train_iter = tqdm(train_dataloader, total=len(train_dataloader)) if accelerator.is_main_process else train_dataloader
         for batch in train_iter:
-            quant_input, emb_loss_input, info_input = model.gen_vision_model.encode(batch['input_pixel_values'])
-            image_tokens_input = info_input[2].detach().reshape(batch['input_pixel_values'].shape[0], -1)
-            image_embeds_input = model.prepare_gen_img_embeds(image_tokens_input)
-
-            inputs_embeds = model.language_model.get_input_embeddings()(batch['input_ids'])
-            # inputs_embeds_action = model.language_model.get_input_embeddings_action()(batch['action_ids'])
-            # inputs_embeds = torch.cat([inputs_embeds, inputs_embeds_action], dim=1)
-            # action_mask = torch.ones(batch['attention_mask'].shape[0], args.action_dim, dtype=torch.bool, device=batch['attention_mask'].device)
-            # batch['attention_mask'] = torch.cat([batch['attention_mask'], action_mask], dim=1)
-            image_indexes, action_indexes = create_component_indexes(inputs_embeds.shape[1], args.action_dim)
-
-            # torch.set_printoptions(threshold=10_000)
-            # print(batch['input_ids'])
-            # print(batch['action_ids'])
-            # # print(batch['attention_mask'])
-            # print(inputs_embeds.shape, batch['attention_mask'].shape)
-            # import time
-            # time.sleep(100)
-
-            #------------ Find the position of the input image gen and concatenate it ------------#
-            image_gen_indices = (batch['input_ids'] == processor.image_start_id).nonzero()
-            if args.image_generation:
-                image_gen_indices = [
-                    ind for ii, ind in enumerate(image_gen_indices) 
-                    if (ii + 1) % (image_embeds_input.shape[0] // args.train_bsz_per_gpu + 1) != 0
-                ]
-            for in_img_index, ind in enumerate(image_gen_indices):
-                offset = ind[1] + 1
-                inputs_embeds[ind[0], offset:offset+image_embeds_input.shape[1], :] = image_embeds_input[in_img_index]
-            #------------ Find the position of the input image gen and concatenate it ------------#
+            inputs_embeds = model.prepare_inputs_embeds(
+                    input_ids=batch['input_ids'],
+                    pixel_values=batch['encoder_pixel_values'],
+                    images_emb_mask=batch['images_emb_mask'],
+                    images_seq_mask=batch['images_seq_mask']
+                )
+            latent_indexes, action_indexes = create_component_indexes(inputs_embeds.shape[1], args.action_dim+1) # important: +1 for <latent_end>
+            # print(batch['input_ids'][0], batch['input_ids'].shape)
+            # print(latent_indexes, action_indexes)
+            # input("check indexes")
             
-            if args.image_generation:
-                quant, emb_loss, info = model.gen_vision_model.encode(batch['pixel_values'])
-                image_tokens = info[2].detach().reshape(batch['pixel_values'].shape[0], -1).contiguous()
-                image_embeds = model.prepare_gen_img_embeds(image_tokens)
-                inputs_embeds[:, -(image_embeds.shape[1]+args.action_dim+1):-(args.action_dim + 1), :] = image_embeds
+            if args.use_latent:
+                
+                batch['latent_pixel_values'] = batch['latent_pixel_values'].unsqueeze(1)
+                bs, n = batch['latent_pixel_values'].shape[0:2]  # [B, n_images, 3, H, W]
+                helper_images = rearrange(batch['latent_pixel_values'], "b n c h w -> (b n) c h w")
+                latent_embeds = model.aligner(model.vision_model(helper_images))
+                latent_embeds = rearrange(latent_embeds, "(b n) t d -> b (n t) d", b=bs, n=n)
+                latent_embeds_full = latent_embeds
 
+                B, T_full, D = latent_embeds_full.shape
+
+                # calculate the latent embeddings (GT) for loss computation
+                latent_size = args.latent_size
+                compress_strategy = args.compress_strategy
+                compressed_latent_embeds = []
+                for b in range(B):
+                    feats = latent_embeds_full[b, :, :]
+                    if feats.shape[0] != latent_size:
+                        if compress_strategy == "average":
+                            group_size = max(1, feats.shape[0] // latent_size)
+                            res = feats.shape[0] % latent_size
+                            if res > 0:
+                                feats = feats[:-res, :]
+                            chunks = torch.split(feats, group_size, dim=0)
+                            feats = torch.cat([c.mean(dim=0, keepdim=True) for c in chunks], dim=0)
+                        else:
+                            feats = feats[:latent_size, :]
+                    compressed_latent_embeds.append(feats)
+                # latent embeddings (GT)
+                compressed_latent_embeds = torch.stack(compressed_latent_embeds, dim=0).to(inputs_embeds.dtype)  # [B, latent_size, D]
+
+                # ------lzy: latent cot progress, not sure whether to use------
+                # latent chain-of-thought process
+                input_ids_for_cot = batch['input_ids'].clone()
+                latent_indices = (input_ids_for_cot == 100847).nonzero()
+                # print("input_ids_for_cot[0]", input_ids_for_cot[0])
+                # print("input_ids_for_cot.shape", input_ids_for_cot.shape)
+                # print("latent indices", latent_indices)
+                # input()
+
+                latent_lists = [[idx[1].item() for idx in latent_indices if idx[0] == i] for i in range(input_ids_for_cot.shape[0])]
+                kv_cache_cot = None
+                next_compute_range = (0, latent_indices[:, 1].min().item()) # init the next compute range
+
+                for latent_i in range(args.latent_size):
+                    # print("next compute range: ", next_compute_range)
+                    curr_input_embeds_cot = inputs_embeds[:, next_compute_range[0] : next_compute_range[1], :]
+                    outputs = model.language_model.model(
+                        inputs_embeds=curr_input_embeds_cot,
+                        return_dict=True,
+                        use_cache=True,
+                        past_key_values=kv_cache_cot if latent_i!=0 else None,
+                        latent_indexes=torch.arange(0, curr_input_embeds_cot.shape[1]).to(curr_input_embeds_cot.device),
+                        action_indexes=torch.arange(0, 0).to(curr_input_embeds_cot.device),
+                    )
+
+                    # update next compute range
+                    next_compute_range = (
+                        next_compute_range[1],
+                        (
+                            input_ids_for_cot.shape[1]
+                            if latent_i + 1 == args.latent_size
+                            else next_compute_range[1] + 1
+                        )
+                    )
+
+                    hidden_states_cot = outputs[0][:, -1:, :]
+                    kv_cache_cot = outputs.past_key_values
+                    
+                    filling_indices = [
+                        (instance_idx, mask_list[latent_i])
+                        for instance_idx, mask_list in enumerate(latent_lists)
+                        if len(mask_list) > latent_i
+                    ]
+                    # print(filling_indices)
+                    # input("Press Enter to continue...")
+
+                    # break the original input embeddings into tensor list
+                    tensor_list = [
+                        [
+                            inputs_embeds[batch_idx, pos, :]
+                            for pos in range(inputs_embeds.shape[1])
+                        ]
+                        for batch_idx in range(inputs_embeds.shape[0])
+                    ]
+                    for idx_pair in filling_indices:
+                        batch_idx, token_idx = idx_pair
+                        tensor_list[batch_idx][token_idx] = hidden_states_cot[batch_idx][0]
+
+                    # re-combine the tensors to input embeddings
+                    inputs_embeds = torch.stack([
+                        torch.stack(tensor_list[batch_idx])
+                        for batch_idx in range(inputs_embeds.shape[0])
+                    ])
+                
+                # compute the cos similarity loss of latent embeddings
+                latent_pad_indices_cot = (batch['input_ids'] == 100847).nonzero()
+                cot_embeds_list = []
+                for batch_idx in range(inputs_embeds.shape[0]):
+                    batch_latent_indices = latent_pad_indices_cot[latent_pad_indices_cot[:,0] == batch_idx]
+                    if len(batch_latent_indices) > 0:
+                        offset = batch_latent_indices[0,1].item()
+                        # print(offset)
+                        # input()
+                        cot_inferred_embeddings = inputs_embeds[batch_idx, offset: offset+args.latent_size, :]
+                        cot_embeds_list.append(cot_inferred_embeddings)
+                inferred_embeddings_all = torch.stack(cot_embeds_list, dim=0).to(compressed_latent_embeds.dtype)
+                similarity = F.cosine_similarity(inferred_embeddings_all, compressed_latent_embeds, dim=-1).mean()
+                sim_loss = 1.0 - similarity
+                # ------lzy: latent cot progress end------
+
+                # ------lzy: 1102 test 1: directly use latent embedding GT as the condition, do not delete------
+                # for b in range(B):
+                #     mask_pos = (latent_mask[b] == 1).nonzero(as_tuple=True)[0]
+                #     if len(mask_pos) > 0:
+                #         replace_len = min(len(mask_pos), compressed_latent_embeds.shape[1])
+                #         inputs_embeds[b, mask_pos[:replace_len], :] = compressed_latent_embeds[b, :replace_len, :]
+
+                # forward for action prediction
                 outputs = model.language_model.model(
                     inputs_embeds=inputs_embeds,
                     attention_mask=batch['attention_mask'],
                     return_dict=True,
                     use_cache=False,
-                    image_indexes=image_indexes,
-                    action_indexes=action_indexes,
-                    image_generation = args.image_generation,
+                    latent_indexes=latent_indexes.to(inputs_embeds.device),
+                    action_indexes=action_indexes.to(inputs_embeds.device),
+                    use_latent=args.use_latent,
                 )
                 hidden_states = outputs.last_hidden_state
 
-                
+                # calculate multimodal loss
+                # action loss (cross entropy)
                 action_tokens = batch['input_ids'][:, -args.action_dim:].contiguous()
                 action_logits = model.language_model.lm_head(hidden_states[:, -(1+args.action_dim) : -1, :])
-                # action_tokens = batch['action_ids']
-                # action_logits = model.language_model.lm_head_action(hidden_states[:, -(1+args.action_dim) : -1, :])
                 action_loss = model.language_model.loss_function(logits=action_logits, labels=None, vocab_size=action_logits.shape[-1], shift_labels=action_tokens)
-                image_logits = model.gen_head(hidden_states[:, -(image_embeds.shape[1]+args.action_dim+2):-(2+args.action_dim), :])
-                image_loss = model.language_model.loss_function(logits=image_logits, labels=None, vocab_size=model_config.gen_vision_config.params.image_token_size, shift_labels=image_tokens)
-                loss = action_loss * 0.5 + image_loss * 0.5
-                metric(args.image_generation, image_logits, image_tokens, image_loss, action_logits, action_tokens, action_loss)
+                if args.freeze_latent: # stage2
+                    loss = action_loss
+                else: # stage0
+                    loss = sim_loss
+                metric(args.use_latent, action_logits, action_tokens, action_loss, sim_loss)
             else:
                 cache_position_condition = torch.arange(0, inputs_embeds.shape[1]-args.action_dim-1, device=inputs_embeds.device, dtype=torch.long)
-                cache_position_action = torch.arange(inputs_embeds.shape[1]-args.action_dim+args.image_token_num, inputs_embeds.shape[1]+args.image_token_num+1, device=inputs_embeds.device, dtype=torch.long)
+                cache_position_action = torch.arange(inputs_embeds.shape[1]-args.action_dim+args.latent_size, inputs_embeds.shape[1]+args.latent_size+1, device=inputs_embeds.device, dtype=torch.long)
                 outputs = model.language_model.model(
                     inputs_embeds=inputs_embeds,
                     attention_mask=batch['attention_mask'],
                     return_dict=True,
                     use_cache=False,
-                    image_indexes=image_indexes,
+                    latent_indexes=latent_indexes,
                     action_indexes=action_indexes,
                     cache_position=torch.cat([cache_position_condition, cache_position_action]),
-                    image_generation = args.image_generation,
+                    use_latent=args.use_latent,
                 )
                 hidden_states = outputs.last_hidden_state
                 
-                
                 action_tokens = batch['input_ids'][:, -args.action_dim:].contiguous()
                 action_logits = model.language_model.lm_head(hidden_states[:, -(1+args.action_dim) : -1, :])
-                # action_tokens = batch['action_ids']
-                # action_logits = model.language_model.lm_head_action(hidden_states[:, -(1+args.action_dim) : -1, :])
                 action_loss = model.language_model.loss_function(logits=action_logits, labels=None, vocab_size=action_logits.shape[-1], shift_labels=action_tokens)
                 loss = action_loss
-                metric(args.image_generation, None, None, None, action_logits, action_tokens, action_loss)
-
+                metric(args.use_latent, action_logits, action_tokens, action_loss)
 
             accelerator.backward(loss)
             if (global_step + 1) % accelerator.gradient_accumulation_steps == 0:
@@ -514,32 +611,28 @@ def train(args: argparse.Namespace) -> None:
                 lr_scheduler.step()
                 optimizer.zero_grad()
 
-                iamge_acc, image_loss, action_acc, action_loss= metric.get_metric() if args.image_generation else metric.get_metric_action()
+                action_acc, action_loss, sim_loss= metric.get_metric() if args.use_latent else metric.get_metric_action()
                 if accelerator.is_main_process:
                     train_iter.set_postfix(
                         epoch=epoch,
                         step=global_step,
                         total_steps=len(train_dataloader),
                         skip=accelerator.optimizer_step_was_skipped,
-                        # length=len(batch["input_ids"][0])+len(batch["action_ids"][0]),
                         length=len(batch["input_ids"][0]),
-                        image_loss=f"{image_loss:.6f}",
-                        iamge_acc=f"{iamge_acc:.6f}",
                         action_loss=f"{action_loss:.6f}",
                         action_acc=f"{action_acc:.6f}",
+                        sim_loss=f"{sim_loss:.6f}",
                         lr=f"{lr_scheduler.get_last_lr()[0]:.2e}"
                     )
                     wandb.log({
-                        'image_loss': image_loss,
-                        'iamge_acc': iamge_acc,
                         'action_loss': action_loss,
                         'action_acc': action_acc,
+                        'sim_loss': sim_loss,
                         'lr': lr_scheduler.get_last_lr()[0]
                     }, step=global_step)
-
             global_step += 1
 
-        if epoch == args.n_epochs-1:
+        if ((epoch + 1) % 20 == 0) or (epoch == args.n_epochs-1):
             accelerator.wait_for_everyone()
             save_checkpoint(
                 model=model,
@@ -549,23 +642,9 @@ def train(args: argparse.Namespace) -> None:
                 epoch=epoch,
                 step=global_step-1,
                 global_step=global_step,
-                is_last=True,
-                stats_data = train_dataset.stats_data,
+                is_last=(epoch == args.n_epochs-1),
+                stats_data=train_dataset.stats_data,
             )
-
-        # if ((epoch + 1) % 10 == 0) or (epoch == args.n_epochs-1):
-        #     accelerator.wait_for_everyone()
-        #     save_checkpoint(
-        #         model=model,
-        #         processor=processor, 
-        #         accelerator=accelerator,
-        #         args=args,
-        #         epoch=epoch,
-        #         step=global_step-1,
-        #         global_step=global_step,
-        #         is_last=(epoch == args.n_epochs-1),
-        #         stats_data=train_dataset.stats_data,
-        #     )
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Pre-training parameter configuration')
@@ -579,7 +658,7 @@ if __name__ == '__main__':
     parser.add_argument('--data_path', type=str, required=True, help='Training data path, can be multiple paths')
     parser.add_argument('--data_root', type=str, required=True, default='')
     parser.add_argument('--output_dir', type=str, default='./', help='Model save path')
-    parser.add_argument('--max_ckpts', type=int, default=5, help='Maximum number of checkpoints to save')
+    parser.add_argument('--max_ckpts', type=int, default=10, help='Maximum number of checkpoints to save')
     parser.add_argument('--log_dir', type=str, default='./train_logs', help='Log save path')
 
     # Training related
@@ -597,10 +676,12 @@ if __name__ == '__main__':
     parser.add_argument('--seed', type=int, default=42, help='Random seed')
     parser.add_argument('--action_dim', type=int, default=7, help='action dim')
     parser.add_argument('--robot_state', action='store_true', default=False, help='enable robot state')
-    parser.add_argument('--image_generation', type=int, default=0, help='generate image')
-    parser.add_argument('--load_action_from_image', type=int, default=0)
-    parser.add_argument('--freeze_image', type=int, default=0)
+    parser.add_argument('--load_action_from_latent', type=int, default=0)
+    parser.add_argument('--freeze_latent', type=int, default=0)
     parser.add_argument('--image_token_num', type=int, default=576)
+    parser.add_argument('--use_latent', type=int, default=1)
+    parser.add_argument('--latent_size', type=int, default=4)
+    parser.add_argument('--compress_strategy',type=str, required=True,default='average')
 
     args = parser.parse_args()
     
@@ -615,3 +696,4 @@ if __name__ == '__main__':
 
     # Start training
     train(args)     
+

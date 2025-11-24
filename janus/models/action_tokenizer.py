@@ -75,3 +75,30 @@ class ActionTokenizer:
     @property
     def vocab_size(self) -> int:
         return self.n_bins
+    
+
+# class ActionTokenizer:
+#     def __init__(
+#         self, tokenizer: PreTrainedTokenizerBase, need_to_sub: int = 0, bins: int = 256, min_action: int = -1, max_action: int = 1
+#     ) -> None:
+#         self.tokenizer, self.n_bins, self.min_action, self.max_action = tokenizer, bins, min_action, max_action
+#         self.bins = np.linspace(min_action, max_action, self.n_bins)
+#         self.bin_centers = (self.bins[:-1] + self.bins[1:]) / 2.0
+        
+#         self.all_bin_centers = np.zeros(self.n_bins)
+#         self.all_bin_centers[:-1] = self.bin_centers
+#         self.all_bin_centers[-1] = self.bins[-1]
+
+#     def __call__(self, action: np.ndarray) -> Union[str, List[str]]:
+#         action = np.clip(action, a_min=float(self.min_action), a_max=float(self.max_action))
+#         discretized_action = np.digitize(action, self.bins) - 1
+#         discretized_action = np.clip(discretized_action, 0, self.n_bins - 1)
+#         return discretized_action
+
+#     def decode_token_ids_to_actions(self, action_token_ids: np.ndarray) -> np.ndarray:
+#         discretized_actions = np.clip(action_token_ids, 0, self.n_bins - 1)
+#         return self.all_bin_centers[discretized_actions]
+
+#     @property
+#     def vocab_size(self) -> int:
+#         return self.n_bins
