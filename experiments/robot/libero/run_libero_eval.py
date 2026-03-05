@@ -89,7 +89,7 @@ class GenerateConfig:
     use_latent: bool = True                         # Whether to use latent
 
     center_crop: bool = False                         # Center crop? (if trained w/ random crop image aug)
-    num_open_loop_steps: int = 32                     # Number of actions to execute open-loop before requerying policy
+    num_open_loop_steps: int = 16                     # Number of actions to execute open-loop before requerying policy
 
     unnorm_key: Union[str, Path] = "rlbench"                # Action un-normalization key
 
@@ -211,10 +211,6 @@ def prepare_observation(obs):
     img = get_libero_image(obs)
     wrist_img = get_libero_wrist_image(obs)
 
-    # # Resize images to size expected by model
-    # img_resized = resize_image_for_policy(img, resize_size)
-    # wrist_img_resized = resize_image_for_policy(wrist_img, resize_size)
-
     # Prepare observations dict
     observation = {
         "full_image": img,
@@ -256,11 +252,11 @@ def run_episode(
     # Reset environment
     env.reset()
 
-    ## ----- chenhao debug for task_id 5----- ##
+    ## ----- debug for task_id 5----- ##
     if cfg.task_suite_name == TaskSuite.LIBERO_SPATIAL and task_id == 5:
         initial_state[12] += 0.038
         print(f"debug: initial_state[12] += 0.038")
-    ## ----- chenhao debug for task_id 5----- ##
+    ## ----- debug for task_id 5----- ##
 
     # Set initial state if provided
     if initial_state is not None:
@@ -295,20 +291,10 @@ def run_episode(
         observation, img = prepare_observation(obs)
         replay_images.append(img)
 
-        # fast_image = observation['full_image']
-        # fast_image = [Image.fromarray(fast_image)]
-        # if (t - cfg.num_steps_wait) % 4 == 0: # update slow image every 4 steps
-        #     slow_image = fast_image
-
         slow_image = observation['full_image']
         slow_image = [Image.fromarray(slow_image)]
         fast_image = observation['wrist_image']
         fast_image = [Image.fromarray(fast_image)]
-
-        # slow_image = observation['wrist_image']
-        # slow_image = [Image.fromarray(slow_image)]
-        # fast_image = observation['full_image']
-        # fast_image = [Image.fromarray(fast_image)]  
 
         # If action queue is empty, requery model
         if len(action_queue) == 0:
@@ -359,12 +345,6 @@ def run_task(
 ):
     """Run evaluation for a single task."""
     # Get task
-    ## ----- chenhao specify task_id for task_id 4----- ##
-
-    # task_id = 4
-
-    ## ----- chenhao specify task_id for task_id 4----- ##    
-
     task = task_suite.get_task(task_id)
 
     # Get initial states
@@ -475,7 +455,6 @@ def eval_libero(cfg: GenerateConfig) -> float:
     # Start evaluation
     total_episodes, total_successes = 0, 0
     for task_id in tqdm.tqdm(range(num_tasks)):
-        # task_id = 6
         total_episodes, total_successes = run_task(
             cfg,
             task_suite,

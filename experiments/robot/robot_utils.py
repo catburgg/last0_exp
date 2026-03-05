@@ -135,11 +135,6 @@ def get_action(
         latent_lists = [[idx[1].item() for idx in latent_indices if idx[0] == i] for i in range(input_ids.shape[0])]
         kv_cache_cot = None
         next_compute_range = (0, latent_indices[:, 1].min().item())
-        
-        # print("input_ids:", input_ids)
-        # print("shape of input ids and latent_indices:", input_ids.shape, latent_indices.shape)
-        # print("latent_indices:", latent_indices)
-        # input("Press Enter to continue...")
 
         # inference for latent cot embeddings
         for latent_i in range(num_latent_tokens):
@@ -185,8 +180,7 @@ def get_action(
                 ]
             )
 
-        # noise = torch.randn(inputs_embeds.shape[0], cfg.num_open_loop_steps, 7, device=device)
-        noise = torch.randn(inputs_embeds.shape[0], 8, 7, device=device)
+        noise = torch.randn(inputs_embeds.shape[0], cfg.num_open_loop_steps, 7, device=device)
         samples = vl_gpt.forward_flow(inputs_embeds, noise)
         
         normalized_actions = samples[0].cpu().numpy()

@@ -14,7 +14,6 @@ OUTPUT_ROOT_DIR="../exp"
 DATA_JSON="/path/to/data.json"
 PRETRAIN_PATH="/path/to/pretrain_path"
 PRETRAIN_ACTION_PATH="/path/to/pretrain_action_path"
-PC_EMBEDDER_CKPT="/path/to/uni3d-b/model.pt"
 
 NUM_PROCESSES=8
 TRAIN_BSZ=8
@@ -24,7 +23,7 @@ accelerate launch --config_file ../config/sft.yaml \
     --num_processes ${NUM_PROCESSES}  \
     --num_machines 1 \
     --machine_rank 0 \
-    --deepspeed_multinode_launcher standard train.py \
+    --deepspeed_multinode_launcher standard train_wopc.py \
     --pretrain_path ${PRETRAIN_PATH} \
     --pretrain_action_path ${PRETRAIN_ACTION_PATH} \
     --data_path ${DATA_JSON} \
@@ -44,8 +43,7 @@ accelerate launch --config_file ../config/sft.yaml \
     --load_action_from_latent 0 \
     --load_action_from_pretrain 1 \
     --use_latent 1 \
-    --latent_size 12 \
-    --pointcloud_embedder_ckpt_path ${PC_EMBEDDER_CKPT} \
+    --latent_size 8 \
     --run_name ${BASE_RUN_NAME}
 
 echo ">>> LaST0 Training Finished."

@@ -4,6 +4,7 @@ import tqdm
 import shutil
 import torch
 from transformers import AutoModelForCausalLM
+from transformers import LlamaTokenizer
 
 from janus.models import MultiModalityCausalLM, VLChatProcessor, ActionTokenizer
 import numpy as np
@@ -76,9 +77,10 @@ def recreate_directory(directory_path):
 def model_load(args):
     vl_chat_processor: VLChatProcessor = VLChatProcessor.from_pretrained(args.model_path)
     tokenizer = vl_chat_processor.tokenizer
+
     vl_gpt: MultiModalityCausalLM = AutoModelForCausalLM.from_pretrained(
-        args.model_path, trust_remote_code=True, torch_dtype=torch.bfloat16,
-        diff=True, action_dim=7
+        args.model_path, trust_remote_code=True, torch_dtype=torch.bfloat16, use_pointcloud=True,
+        flow=True, action_dim=7, action_chunk=1, fast_and_slow=True
     )
     action_tokenizer = ActionTokenizer(tokenizer, need_to_sub=3)
 
@@ -98,14 +100,13 @@ def model_load(args):
 
     return vl_gpt, vl_chat_processor, action_tokenizer, statistic
 
-def model_predict_mask_once_kvcache(args, vl_gpt, vl_chat_processor, action_tokenizer, statistic, task_description, image, state, pointcloud):
+def model_predict_mask_once_kvcache(args, vl_gpt, vl_chat_processor, action_tokenizer, statistic, task_description, fast_image, slow_image, state, pointcloud):
     device = f'cuda:{args.cuda}'
     vl_gpt = vl_gpt.to(device).eval()
-    parallel_size=1
-    img_len = 1
-    action_token_num = 7
+    parallel_size = 1
+    fast_img_len = 1
+    slow_img_len = 1
     num_latent_tokens = args.latent_size
-    num_ddim_steps = args.ddim_steps
 
     state_tokens = ""
     if args.use_robot_state:
@@ -118,8 +119,17 @@ def model_predict_mask_once_kvcache(args, vl_gpt, vl_chat_processor, action_toke
         state_tokens += action_tokenizer(normalized_state)
 
     pre_data = []
-    input_img_tokens_1 = vl_chat_processor.image_start_tag + vl_chat_processor.image_tag*vl_chat_processor.num_image_tokens +vl_chat_processor.image_end_tag
-    user_content = input_img_tokens_1 * img_len + task_description + state_tokens 
+    input_img_tokens = vl_chat_processor.image_start_tag + vl_chat_processor.image_tag*vl_chat_processor.num_image_tokens +vl_chat_processor.image_end_tag
+    
+    input_slow_img_tokens = input_img_tokens * slow_img_len
+    input_fast_img_tokens = input_img_tokens * fast_img_len
+
+    latent_start_str = "<|latent_start|>"
+    latent_pad_str = "<|latent_pad|>" * num_latent_tokens
+    latent_end_str = "<|latent_end|>"
+    latent_str = latent_start_str + latent_pad_str + latent_end_str
+    
+    user_content = input_slow_img_tokens + task_description + state_tokens + latent_str + input_fast_img_tokens
 
     conversation = [
                     {"role": "<|User|>","content": user_content},
@@ -130,21 +140,18 @@ def model_predict_mask_once_kvcache(args, vl_gpt, vl_chat_processor, action_toke
             sft_format=vl_chat_processor.sft_format,
             system_prompt="",
         )
+    
+    all_image = slow_image + fast_image 
 
     with torch.inference_mode():
-        input_image_pixel_values = vl_chat_processor.image_processor(image, return_tensors="pt")['pixel_values'].to(torch.bfloat16)
+        input_image_pixel_values = vl_chat_processor.image_processor(all_image, return_tensors="pt")['pixel_values'].to(torch.bfloat16)
 
         input_ids =  torch.LongTensor(vl_chat_processor.tokenizer.encode(sft_format))
-        latent_start_value = torch.tensor(100846).expand(*input_ids.shape[:-1], 1)
-        latent_pad_value = torch.tensor(100847).expand(*input_ids.shape[:-1], args.latent_size)
-        latent_end_value = torch.tensor(100848).expand(*input_ids.shape[:-1], 1) # not used
-        input_ids = torch.cat([input_ids, latent_start_value, latent_pad_value], dim=-1)
-
         tokens = torch.zeros((parallel_size, len(input_ids)), dtype=torch.long)
 
         for i in range(parallel_size):
             tokens[i, :] = input_ids
-            pre_data.append(VLChatProcessorOutput(sft_format=sft_format, pixel_values=input_image_pixel_values, input_ids=tokens[i], num_image_tokens=[vl_chat_processor.num_image_tokens] * img_len))
+            pre_data.append(VLChatProcessorOutput(sft_format=sft_format, pixel_values=input_image_pixel_values, input_ids=tokens[i], num_image_tokens=[vl_chat_processor.num_image_tokens] * (slow_img_len + fast_img_len)))
         prepare_inputs = vl_chat_processor.batchify(pre_data)
 
         inputs_embeds = vl_gpt.prepare_inputs_embeds(
@@ -154,17 +161,13 @@ def model_predict_mask_once_kvcache(args, vl_gpt, vl_chat_processor, action_toke
             images_seq_mask=prepare_inputs['images_seq_mask'].to(device)
         )
         
+        torch.set_printoptions(profile="full")
+
         input_ids = input_ids.unsqueeze(0)
         latent_indices = (input_ids == 100847).nonzero()
         latent_lists = [[idx[1].item() for idx in latent_indices if idx[0] == i] for i in range(input_ids.shape[0])]
         kv_cache_cot = None
         next_compute_range = (0, latent_indices[:, 1].min().item())
-        generated_action_tokens = torch.zeros((parallel_size, action_token_num), dtype=torch.int).to(device)
-        
-        # print("input_ids:", input_ids)
-        # print("shape of input ids and latent_indices:", input_ids.shape, latent_indices.shape)
-        # print("latent_indices:", latent_indices)
-        # input("Press Enter to continue...")
 
         # inference for latent cot embeddings
         for latent_i in range(num_latent_tokens):
@@ -210,35 +213,8 @@ def model_predict_mask_once_kvcache(args, vl_gpt, vl_chat_processor, action_toke
                 ]
             )
 
-        # inference for action noise
-        add_tokens = torch.tensor([100848]*parallel_size).to(device)
-        add_embeds = vl_gpt.language_model.get_input_embeddings()(add_tokens).unsqueeze(1)
-        # last_cot_embeds = inputs_embeds[:, -1:, :]
-        # print(inputs_embeds.shape)
-        # input()
-        inputs_embeds = torch.cat([inputs_embeds, add_embeds], dim=1)
-
         noise = torch.randn(inputs_embeds.shape[0], args.action_chunk, 7, device=device)
-        sample_fn = vl_gpt.forward_diff
-        model_kwargs = {'inputs_embeds': inputs_embeds,
-                        # 'past_key_values': None,
-                    }
-
-        if num_ddim_steps is not None:
-            if vl_gpt.ddim_diffusion is None:
-                vl_gpt.create_ddim(ddim_step=num_ddim_steps)
-            samples = vl_gpt.ddim_diffusion.ddim_sample_loop(
-                sample_fn, 
-                noise.shape, 
-                noise, 
-                clip_denoised=False,
-                model_kwargs=model_kwargs,
-                progress=False,
-                device=device,
-                eta=0.0
-            )
-        else:
-            raise ValueError("no ddim steps!")
+        samples = vl_gpt.forward_flow(inputs_embeds, noise)
         
         normalized_actions = samples[0].cpu().numpy()
         if normalized_actions.ndim == 1:
@@ -270,7 +246,6 @@ def main(args):
     Logger.log_info(f'actions chunk: {args.action_chunk}')
     Logger.log_info(f'max steps: {args.max_steps}')
     Logger.log_info(f'cuda used: {args.cuda}')
-    # cprint('-' * os.get_terminal_size().columns, 'cyan')
 
     action_mode = RLBenchActionMode.eepose_then_gripper_action_mode(absolute=True)
     obs_config = RLBenchObservationConfig.single_view_config(camera_name='front', image_size=(224, 224))
@@ -320,19 +295,14 @@ def main(args):
         gripper_open = None
         
         for j in range(episode_length):
-            
-            image = obs_dict['image']
-            image = [Image.fromarray(image)]
-            # task_description = env.text
-            if args.task_name == "close_box":
-                task_description = "close the lid on the box"
-            elif args.task_name == "close_laptop_lid":
-                task_description = "shut the laptop lid"
-            elif args.task_name == "phone_on_base":
-                task_description = "grasp the phone and put it on the base"
-            elif args.task_name == "sweep_to_dustpan":
-                task_description = "grasping the broom by its handle, clear way the dirt from the table"
 
+            fast_image = obs_dict['image']
+            fast_image = [Image.fromarray(fast_image)]
+            if j % args.fs_ratio == 0:
+                slow_image = fast_image
+
+            task_description = env.text
+            
             robot_state = obs_dict['robot_state']
             robot_state = EEpose.pose_7DoF_to_6DoF(robot_state[7:14])
             robot_state = np.concatenate([robot_state, np.array([gripper_open])]) if gripper_open != None else np.concatenate([robot_state, np.array([1])])
@@ -343,7 +313,7 @@ def main(args):
             else:
                 point_cloud=None
 
-            actions = model_predict_mask_once_kvcache(args, vl_gpt, vl_chat_processor, action_tokenizer, statistic, task_description, image, cur_robot_state, point_cloud)
+            actions = model_predict_mask_once_kvcache(args, vl_gpt, vl_chat_processor, action_tokenizer, statistic, task_description, fast_image, slow_image, cur_robot_state, point_cloud)
 
             for action in actions:
                 action[:3] += obs_dict['robot_state'][7:10]
@@ -386,12 +356,11 @@ if __name__ == '__main__':
     parser.add_argument('--model-path', type=str, default='')
     parser.add_argument('--exp-name', type=str, default=None)
     parser.add_argument('--max-steps', type=int, default=10)
-    parser.add_argument('--ddim-steps', type=int, default=10)
     parser.add_argument('--cuda', type=str, default='7')
     parser.add_argument('--use_robot_state', type=int, default=1)
     parser.add_argument('--load-pointcloud', type=int, default=0)
     parser.add_argument('--action-chunk', type=int, default=1)
     parser.add_argument('--use_latent', type=int, default=1)
     parser.add_argument('--latent_size', type=int, default=4)
-    parser.add_argument('--compress_strategy',type=str, required=True,default='average')
+    parser.add_argument('--fs_ratio', type=int, default=4)
     main(parser.parse_args())

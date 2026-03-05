@@ -27,7 +27,6 @@ from transformers import (
 from transformers import AutoModelForCausalLM
 from janus.models import VLChatProcessor, ActionTokenizer
 
-
 logger = logging.getLogger(__name__)
 logging.basicConfig(level='INFO')
 
@@ -72,31 +71,19 @@ def create_component_indexes(seq_len, action_len=7):
     action_indexes = torch.arange(seq_len - action_len, seq_len)
     return latent_indexes, action_indexes
 
+
 class TrainingMetrics:
     def __init__(self, device):
         self.n_step = 0
-        self.action_right = torch.Tensor([0]).to(device=device)
         self.action_total = torch.Tensor([0]).to(device=device)
         self.action_loss = torch.Tensor([0]).to(device=device)
         self.sim_loss = torch.Tensor([0]).to(device=device)
         self.world_size = dist.get_world_size()
 
-    def __call__(self, has_latent, action_loss, sim_loss):
-        if has_latent:
-            return self.update(action_loss, sim_loss)
-        else:
-            return self.update_action(action_loss, sim_loss)
+    def __call__(self, action_loss, sim_loss):
+        return self.update(action_loss, sim_loss)
 
     def update(self, action_loss, sim_loss):
-        self.n_step += 1
-        with torch.no_grad():
-            # print("label", shift_action_labels[0])
-            # print("pred", shift_action_preds[0])
-            # print()
-            self.action_loss += action_loss.item()
-            self.sim_loss += sim_loss.item()
-
-    def update_action(self, action_loss, sim_loss):
         self.n_step += 1
         with torch.no_grad():
             self.action_loss += action_loss.item()
@@ -115,20 +102,6 @@ class TrainingMetrics:
             self.sim_loss.fill_(0)
         return action_loss, sim_loss
 
-    def get_metric_action(self, reset=True):
-        dist.all_reduce(self.action_total, op=torch.distributed.ReduceOp.SUM)
-        dist.all_reduce(self.action_loss, op=torch.distributed.ReduceOp.SUM)
-        dist.all_reduce(self.sim_loss, op=torch.distributed.ReduceOp.SUM)
-        action_loss = self.action_loss.item() / (self.world_size * self.n_step)
-        sim_loss = self.sim_loss.item() / (self.world_size * self.n_step)   
-
-        if reset:
-            self.n_step = 0
-            self.action_total.fill_(0)
-            self.action_loss.fill_(0)
-            self.sim_loss.fill_(0)
-        return 0, 0, action_loss, sim_loss
-
 
 class SftDataset(Dataset):
     def __init__(self, config, processor,accelerator, model):
@@ -139,6 +112,7 @@ class SftDataset(Dataset):
         self.action_tokenizer = ActionTokenizer(self.tokenizer, need_to_sub=3) # 3 for latent spetial tokens
         self.accelerator = accelerator
         self.image_len = 576
+
         with open(config.data_path,'r') as f:
             self.data = json.load(f)
 
@@ -191,31 +165,18 @@ class SftDataset(Dataset):
         )
 
     def collate_fn(self, batch: List[Dict[str, torch.Tensor]]) -> Dict[str, torch.Tensor]:
-        if self.config.use_latent: # only for multi image
+        
+        if self.config.use_latent:
             # Image
             latent_images_nested = [
                 [os.path.join(self.img_dir, img) for img in x['output_image']]
                 for x in batch
             ]
             latent_pixel_values_list = [
-                self.process_image(img_list).to(torch.bfloat16)  # -> [n_images, C, H, W]
+                self.process_image(img_list).to(torch.bfloat16)
                 for img_list in latent_images_nested
             ]
             latent_pixel_values = torch.stack(latent_pixel_values_list, dim=0)
-
-            # Point Cloud
-            latent_pc_nested = [
-                [os.path.join(self.img_dir, pc) for pc in x['output_pointcloud']]
-                for x in batch
-            ]
-            latent_pc_list = []
-            for sample_pc_paths in latent_pc_nested:
-                sample_pcs = []
-                for pc_path in sample_pc_paths:
-                    pc_data = np.load(pc_path)
-                    sample_pcs.append(torch.from_numpy(pc_data).float())
-                latent_pc_list.append(torch.stack(sample_pcs)) # [4, N_points, C]
-            latent_pointclouds = torch.stack(latent_pc_list).to(torch.bfloat16) # [B, 4, N_points, C]
         
             # State
             latent_state_ids_list = []
@@ -235,10 +196,9 @@ class SftDataset(Dataset):
             latent_state_ids = torch.stack(latent_state_ids_list, dim=0)
         else:
             latent_pixel_values = None
-            latent_pointclouds = None
             latent_state_ids = None
 
-        input_img_tokens = self.processor.image_start_tag + self.processor.image_tag*self.processor.num_image_tokens +self.processor.image_end_tag
+        input_img_tokens = self.processor.image_start_tag + self.processor.image_tag * self.processor.num_image_tokens + self.processor.image_end_tag
 
         # Generate noisy actions and timesteps for diffusion
         actions = [x['action'] for x in batch]
@@ -336,8 +296,7 @@ class SftDataset(Dataset):
             "input_ids": prepare_inputs.input_ids,
             "encoder_pixel_values": prepare_inputs.pixel_values.to(torch.bfloat16),
             "latent_pixel_values": latent_pixel_values,
-            "latent_pointclouds": latent_pointclouds, # [B, 4, N, C]
-            "latent_state_ids": latent_state_ids, # [B, 4, 7]
+            "latent_state_ids": latent_state_ids,
             "noisy_actions": x_t,
             "target": u_t,
             "timesteps": time,
@@ -410,37 +369,31 @@ def train(args: argparse.Namespace) -> None:
     )
 
     processor = VLChatProcessor.from_pretrained(
-        args.model_path,
+        args.pretrain_path,
         trust_remote_code=True
     )
     model = AutoModelForCausalLM.from_pretrained(
-        args.model_path,
+        args.pretrain_path,
         trust_remote_code=True,
         torch_dtype=torch.bfloat16,
-        diff = False,
         flow = True,
         action_dim=args.action_dim,
-        use_pointcloud=True,
+        action_chunk=args.action_chunk,
+        use_pointcloud=False,
         use_latent=args.use_latent,
         ignore_mismatched_sizes=True,
     )
     model_action = AutoModelForCausalLM.from_pretrained(
-        args.action_model_path,
+        args.pretrain_action_path,
         trust_remote_code=True,
         torch_dtype=torch.bfloat16,
-        diff = False,
         flow = True,
         action_dim=args.action_dim,
-        use_pointcloud=True,
+        action_chunk=args.action_chunk,
+        use_pointcloud=False,
         use_latent=args.use_latent,
         ignore_mismatched_sizes=True,
     )
-    model_config = model.config
-    model_action_config = model_action.config
-
-    if not args.freeze_latent: # pointcloud embedder initialization
-        model.projector_3d.initialize_weights()
-        model.load_encoder_to_pointcloud_embedder(args.pointcloud_embedder_ckpt_path) # load pointcloud embedder
 
     for name, param in model.named_parameters():
         if '_action' in name:
@@ -452,32 +405,18 @@ def train(args: argparse.Namespace) -> None:
             elif args.load_action_from_pretrain and name.endswith('.weight'):
                 base_name = name.replace('_action', '')
                 if base_name in model_action.state_dict():
-                    # print(f"Initialized {name} from {base_name}")
-                    # input("Press Enter to continue...")
                     param.data.copy_(model_action.state_dict()[base_name])
                     accelerator.print(f"Initialized {name} from {base_name}")
-            if args.freeze_latent:
-                param.requires_grad = True
-            else:
-                param.requires_grad = False
+            param.requires_grad = True
         elif 'x_embedder' in name or 'state_embedder' in name or 't_embedder' in name or 'final_layer' in name:
             param.data.copy_(model_action.state_dict()[name])
             accelerator.print(f"Initialized {name} from {name}")
-            if args.freeze_latent:
-                param.requires_grad = True
-            else:
-                param.requires_grad = False
+            param.requires_grad = True
         else:
-            if args.freeze_latent:
-                # if 'lm_head' in name or 'embed_tokens' in name: # important!: action also need lm_head to decode
-                #     param.requires_grad = True
-                # else:
-                    param.requires_grad = False
+            if any(name.startswith(prefix) for prefix in ["vision_model", "aligner", "gen_vision_model"]):
+                param.requires_grad = False
             else:
-                if any(name.startswith(prefix) for prefix in ["vision_model", "aligner", "gen_vision_model"]) or 'pointcloud_embedder' in name:
-                    param.requires_grad = False
-                else:
-                    param.requires_grad = True
+                param.requires_grad = True
 
     accelerator.print("\n==== Parameter Freeze Status ====\n")
     for name, param in model.named_parameters():
@@ -488,17 +427,12 @@ def train(args: argparse.Namespace) -> None:
     trainable_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
     non_trainable_params = total_params - trainable_params
 
-    accelerator.print(f"Freeze latent: {args.freeze_latent}")
     accelerator.print(f"Load action from latent: {args.load_action_from_latent}")
     accelerator.print(f"Load action from pretrain: {args.load_action_from_pretrain}")
     accelerator.print(f"Total parameters: {total_params/1e9:.2f}B")
     accelerator.print(f"Trainable parameters: {trainable_params/1e9:.2f}B")
     accelerator.print(f"Non-trainable parameters: {non_trainable_params/1e9:.2f}B")
     accelerator.print(f"Trainable ratio: {trainable_params/total_params*100:.2f}%")
-    if args.freeze_latent:
-        accelerator.print("Freeze strategy: Training only parameters with '_action' in name")
-    else:
-        accelerator.print("Freeze strategy: Freezing only vision-related parameters (vision_model, aligner, gen_vision_model)")
 
     no_decay = ["bias", "LayerNorm.weight"]
     optimizer_grouped_parameters = [
@@ -519,7 +453,7 @@ def train(args: argparse.Namespace) -> None:
         batch_size=args.train_bsz_per_gpu,
         shuffle=True,
         collate_fn=train_dataset.collate_fn,
-        num_workers=4
+        num_workers=8
     )
 
     num_training_steps = int(len(train_dataloader) * args.n_epochs) // accelerator.gradient_accumulation_steps // dist.get_world_size()
@@ -536,10 +470,8 @@ def train(args: argparse.Namespace) -> None:
     global_step = 0
 
     for epoch in range(0, args.n_epochs):
-
         train_iter = tqdm(train_dataloader, total=len(train_dataloader)) if accelerator.is_main_process else train_dataloader
         for batch in train_iter:
-            
             inputs_embeds = model.prepare_inputs_embeds(
                     input_ids=batch['input_ids'],
                     pixel_values=batch['encoder_pixel_values'],
@@ -547,15 +479,7 @@ def train(args: argparse.Namespace) -> None:
                     images_seq_mask=batch['images_seq_mask']
                 )
             
-            # torch.set_printoptions(profile="full")
-            # print(batch['input_ids'][0])
-            # print(batch['input_ids'].shape)
-            # print(batch['noisy_actions'][0])
-            # print("before:", inputs_embeds.shape)
-            # input("Press Enter to continue...")
-            
-            ## Add diffuison related tokens (time + action)
-            # for convienience, we directly append the two tokens at the end (1129)
+            # Add flow matching related tokens (time + action)
             noisy_actions = model.x_embedder(batch['noisy_actions'].to(inputs_embeds.dtype))
             timesteps = model.t_embedder(batch['timesteps'].to(inputs_embeds.dtype)).unsqueeze(1)
             inputs_embeds = torch.cat([
@@ -569,67 +493,35 @@ def train(args: argparse.Namespace) -> None:
                 torch.ones((batch['attention_mask'].shape[0], noisy_actions.shape[1]), dtype=torch.bool).to(batch['attention_mask'].device),
             ], dim=1)
 
-            # print("after: ", inputs_embeds.shape)
-            # input("after check shape")
-
             fast_img_len = batch['fast_img_len']
-            latent_indexes, action_indexes = create_component_indexes(inputs_embeds.shape[1], 3 + 578*fast_img_len) # important: 3 means <latent_end>, <timestep>, <noise>
-            # print(batch['input_ids'][0], batch['input_ids'].shape)
-            # print(latent_indexes, action_indexes)
-            # input("check indexes")
+            action_len = 1 + 578 * fast_img_len + 1 + args.action_chunk
+            latent_indexes, action_indexes = create_component_indexes(inputs_embeds.shape[1], action_len) 
             
             if args.use_latent:
                 bs, n_future = batch['latent_pixel_values'].shape[0:2]
                 num_frames = batch['latent_pixel_values'].shape[1]
-                tokens_per_modality = (args.latent_size - num_frames) // (num_frames * 2)
+                tokens_per_modality = (args.latent_size - num_frames) // num_frames
 
                 # Process helper images
                 helper_images = rearrange(batch['latent_pixel_values'], "b n c h w -> (b n) c h w")
-                img_embeds_flat = model.aligner(model.vision_model(helper_images)) # [B*4, 576, D]
-                img_embeds = rearrange(img_embeds_flat, "(b n) t d -> b n t d", b=bs, n=n_future) # Reshape -> [B, 4, 576, D]
+                img_embeds_flat = model.aligner(model.vision_model(helper_images)) 
+                img_embeds = rearrange(img_embeds_flat, "(b n) t d -> b n t d", b=bs, n=n_future) 
                 # Compression (Average Pooling)
                 T_vis = img_embeds.shape[2]
                 group_size_img = T_vis // tokens_per_modality
                 img_chunks = torch.split(img_embeds, group_size_img, dim=2)
-                compressed_imgs = torch.cat([c.mean(dim=2, keepdim=True) for c in img_chunks[:tokens_per_modality]], dim=2) # # [B, 4, K, D] where K = tokens_per_modality
-
-                # Process helper pointclouds
-                helper_pcs = batch['latent_pointclouds'].to(img_embeds.device).to(img_embeds.dtype) # [B, 4, N_points, C]
-                helper_pcs_flat = rearrange(helper_pcs, "b n p c -> (b n) p c") # Flatten -> [B*4, N_points, C]
-                pc_embeds_flat, pc_centers = model.pointcloud_embedder(helper_pcs_flat)# Encode -> [B*4, T_pc_raw, D]
-                pc_embeds_projected = model.projector_3d(pc_embeds_flat.to(torch.bfloat16) )  # Project -> [B*4, T_pc_raw, D_model]
-                pc_embeds = rearrange(pc_embeds_projected, "(b n) t d -> b n t d", b=bs, n=n_future) # Reshape -> [B, 4, T_pc_raw, D]
-                # Compression (Average Pooling)
-                T_pc = pc_embeds.shape[2]
-                group_size_pc = max(1, T_pc // tokens_per_modality) 
-                pc_chunks = torch.split(pc_embeds, group_size_pc, dim=2)
-                compressed_pcs_list = []
-                for i in range(tokens_per_modality):
-                    if i < len(pc_chunks):
-                        compressed_pcs_list.append(pc_chunks[i].mean(dim=2, keepdim=True))
-                    else:
-                        compressed_pcs_list.append(pc_chunks[-1].mean(dim=2, keepdim=True))
-                compressed_pcs = torch.cat(compressed_pcs_list, dim=2) # # [B, 4, K, D]
+                compressed_imgs = torch.cat([c.mean(dim=2, keepdim=True) for c in img_chunks[:tokens_per_modality]], dim=2) 
 
                 # Process helper states
                 state_ids = batch['latent_state_ids'].to(img_embeds.device)
-                state_embeds_full = model.language_model.model.embed_tokens(state_ids) # # [B, 4, 7, D]
+                state_embeds_full = model.language_model.model.embed_tokens(state_ids) 
                 # Compress state embedding (Average Pooling)
-                compressed_state = state_embeds_full.mean(dim=2, keepdim=True) # [B, 4, 1, D]
+                compressed_state = state_embeds_full.mean(dim=2, keepdim=True) 
 
-                # print("compressed_imgs.shape", compressed_imgs.shape)
-                # print("compressed_pcs.shape", compressed_pcs.shape)
-                # print("compressed_state.shape", compressed_state.shape)
-                # input()
-
-                combined_embeds = torch.cat([compressed_imgs, compressed_pcs, compressed_state], dim=2)
+                combined_embeds = torch.cat([compressed_imgs,compressed_state], dim=2)
                 compressed_latent_embeds = rearrange(combined_embeds, "b n k d -> b (n k) d")
                 compressed_latent_embeds = compressed_latent_embeds.to(inputs_embeds.dtype)
 
-                # ==============================================================================
-                # [Optimization] Parallel Latent Training (Teacher Forcing)
-                # ==============================================================================
-                
                 latent_start_id = processor.tokenizer.convert_tokens_to_ids("<|latent_start|>")
                 latent_pad_id = processor.tokenizer.convert_tokens_to_ids("<|latent_pad|>")
                 
@@ -646,9 +538,7 @@ def train(args: argparse.Namespace) -> None:
                 if pad_mask.sum() != compressed_latent_embeds.numel() // compressed_latent_embeds.shape[-1]:
                     logger.warning("Latent pad count mismatch! Falling back to safe replacement.")
 
-                # latent_noise = torch.randn_like(compressed_latent_embeds) * 0.05 
-                # input_latents = (compressed_latent_embeds + latent_noise).detach()
-                input_latents = compressed_latent_embeds.detach() # no noise
+                input_latents = compressed_latent_embeds.detach() 
                 
                 if pad_mask.sum() == input_latents.numel() // input_latents.shape[-1]:
                     inputs_embeds[pad_mask] = input_latents.reshape(-1, input_latents.shape[-1])
@@ -710,11 +600,8 @@ def train(args: argparse.Namespace) -> None:
                 # action loss (cross entropy)
                 predicted_noise = model.final_layer(hidden_states)[:, -(batch['target'].shape[1]):, :] # the last token is noise
                 action_loss = nn.MSELoss()(predicted_noise, batch['target'].to(predicted_noise.dtype))
-                if args.freeze_latent: # stage2
-                    loss = action_loss
-                else: # stage1
-                    loss = sim_loss
-                metric(args.use_latent, action_loss, sim_loss)
+                loss = sim_loss + action_loss
+                metric(action_loss, sim_loss)
             else:
                 latent_indexes=torch.arange(0, 0).to(inputs_embeds.device)
                 action_indexes=torch.arange(0, inputs_embeds.shape[1]).to(inputs_embeds.device)
@@ -729,10 +616,11 @@ def train(args: argparse.Namespace) -> None:
                 )
                 hidden_states = outputs.last_hidden_state
                 
-                predicted_noise = model.final_layer(hidden_states[:, -1, :]) # the last token is noise
-                action_loss = nn.MSELoss()(predicted_noise, batch['noise'])
+                predicted_noise = model.final_layer(hidden_states)[:, -(batch['target'].shape[1]):, :] # the last token is noise
+                action_loss = nn.MSELoss()(predicted_noise, batch['target'].to(predicted_noise.dtype))
                 loss = action_loss
-                metric(args.use_latent, None, None, action_loss)
+                sim_loss = torch.tensor(0.0).to(action_loss.device)
+                metric(action_loss, sim_loss)
 
             accelerator.backward(loss)
             if (global_step + 1) % accelerator.gradient_accumulation_steps == 0:
@@ -782,8 +670,8 @@ if __name__ == '__main__':
     # Experiment settings
     parser.add_argument('--experiment_name', type=str, default='janus_train', help='Experiment name')
     parser.add_argument('--run_name', type=str, default='run_1', help='Run name')
-    parser.add_argument('--model_path', type=str, default='', help='Pre-trained model path')
-    parser.add_argument('--action_model_path', type=str, default='', help='Resume from action checkpoint')
+    parser.add_argument('--pretrain_path', type=str, default='', help='Pre-trained model path')
+    parser.add_argument('--pretrain_action_path', type=str, default='', help='Resume from action checkpoint')
 
     # Data related
     parser.add_argument('--data_path', type=str, required=True, help='Training data path, can be multiple paths')
@@ -807,16 +695,14 @@ if __name__ == '__main__':
     # Others
     parser.add_argument('--seed', type=int, default=42, help='Random seed')
     parser.add_argument('--action_dim', type=int, default=7, help='action dim')
+    parser.add_argument('--action_chunk', type=int, default=8)
     parser.add_argument('--robot_state', action='store_true', default=False, help='enable robot state')
     parser.add_argument('--load_action_from_latent', type=int, default=0)
     parser.add_argument('--load_action_from_pretrain', type=int, default=0)
-    parser.add_argument('--freeze_latent', type=int, default=0)
     parser.add_argument('--image_token_num', type=int, default=576)
     parser.add_argument('--fast_view_num', type=int, default=1)
     parser.add_argument('--use_latent', type=int, default=1)
     parser.add_argument('--latent_size', type=int, default=4)
-    parser.add_argument('--compress_strategy',type=str, required=True,default='average')
-    parser.add_argument('--pointcloud_embedder_ckpt_path', type=str, required=True, help='PointCloud embedder checkpoint path')
 
     args = parser.parse_args()
     
