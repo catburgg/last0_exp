@@ -221,12 +221,13 @@ class MultiModalityPreTrainedModel(PreTrainedModel):
 class MultiModalityCausalLM(MultiModalityPreTrainedModel):
     def __init__(self, config: MultiModalityConfig,
                 action_dim = None,
+                action_chunk = None,
                 flow = False,
                 use_latent = True,
                 robot_state = False,
                 use_pointcloud = False,
                 fast_and_slow = False,
-                fast_image_num = 3,
+                fast_image_num = 1,
             ):
         super().__init__(config)
         self.flow = flow
@@ -235,6 +236,8 @@ class MultiModalityCausalLM(MultiModalityPreTrainedModel):
         self.fast_image_num = fast_image_num
         self.use_latent = use_latent
         self.robot_state = robot_state
+        self.action_dim = action_dim
+        self.action_chunk = action_chunk
 
         vision_config = config.vision_config
         vision_cls = model_name_to_cls(vision_config.cls)
@@ -284,7 +287,7 @@ class MultiModalityCausalLM(MultiModalityPreTrainedModel):
             from types import SimpleNamespace
 
             uni3d_args = SimpleNamespace(
-                pc_model='eva02_base_patch14_448.mim_in22k_ft_in1k', # Uni3D Base 使用的 ViT
+                pc_model='eva02_base_patch14_448.mim_in22k_ft_in1k', # Uni3D Base ViT
                 pretrained_pc='', 
                 drop_path_rate=0.0,
                 pc_feat_dim=768, 
@@ -338,7 +341,6 @@ class MultiModalityCausalLM(MultiModalityPreTrainedModel):
                     v = v[:, :3, :]
             
             new_state_dict[k] = v
-
         missing, unexpected = self.pointcloud_embedder.load_state_dict(new_state_dict, strict=False)
         
         print(f"Successfully loaded parameters to self.pointcloud_embedder")
@@ -361,8 +363,9 @@ class MultiModalityCausalLM(MultiModalityPreTrainedModel):
                 latent_indexes=torch.arange(0, inputs_embeds.shape[1]-3).to(inputs_embeds.device)
                 action_indexes=torch.arange(inputs_embeds.shape[1]-3, inputs_embeds.shape[1]).to(inputs_embeds.device)
             else:
-                latent_indexes=torch.arange(0, inputs_embeds.shape[1] - 3 - 578 * self.fast_image_num).to(inputs_embeds.device)
-                action_indexes=torch.arange(inputs_embeds.shape[1] - 3 - 578 * self.fast_image_num, inputs_embeds.shape[1]).to(inputs_embeds.device)
+                action_len = 1 + 578 * self.fast_image_num + 1 + self.action_chunk
+                latent_indexes=torch.arange(0, inputs_embeds.shape[1] - action_len).to(inputs_embeds.device)
+                action_indexes=torch.arange(inputs_embeds.shape[1] - action_len, inputs_embeds.shape[1]).to(inputs_embeds.device)
         else:
             inputs_embeds = torch.cat([timesteps, noisy_actions], dim=1)
             past_key_values = tuple(

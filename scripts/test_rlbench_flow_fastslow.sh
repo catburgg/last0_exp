@@ -10,11 +10,11 @@ export PYTHONPATH=/media/liuzhuoyang/LCoT_VLA_MOT:$PYTHONPATH
 
 # export CUDA_VISIBLE_DEVICES=4,5,6,7
 
-N=3
+N=0
 Xvfb :$N -screen 0 1024x768x24 &
 export DISPLAY=:$N
 
-models=("/media/liuzhuoyang/LCoT_VLA_MOT/exp/latent_cot_mot_flow/janus_pro_siglip_uni3d_1B_1e-4_mot_pretrain1220e5_12tasks_view1_action_latent_sparse_slow1_fast4_pc_state_12_0107/stage3/checkpoint-249-37500/tfmr")
+models=("/media/liuzhuoyang/LCoT_VLA_MOT/exp/latent_cot_mot_flow/janus_pro_siglip_uni3d_1B_1e-4_mot_pretrain0220e0_12tasks_view1_action_latent_sparse_slow1_fast4_pc_state_12_0303/checkpoint-399-60000/tfmr")
 # tasks=("close_box" "close_laptop_lid")
 # tasks=("toilet_seat_down" "sweep_to_dustpan")
 # tasks=("close_fridge" "place_wine_at_rack_location")
@@ -26,7 +26,7 @@ tasks=("close_box" "close_laptop_lid" "sweep_to_dustpan" "phone_on_base" "toilet
 
 # tasks=("close_box" "close_laptop_lid" "sweep_to_dustpan" "phone_on_base")
 
-# tasks=("phone_on_base")
+# tasks=("close_box")
 
 for model in "${models[@]}"; do
   exp_name=$(echo "$model" | awk -F'/' '{print $(NF-3)"_"$(NF-2)"_"$(NF-1)}')
@@ -46,7 +46,7 @@ for model in "${models[@]}"; do
       --latent_size 12 \
       --compress_strategy average \
       --fs_ratio 4 \
-      --result-dir /media/liuzhuoyang/LCoT_VLA_MOT/test_results/test_0112_mot_4 \
+      --result-dir /media/liuzhuoyang/LCoT_VLA_MOT/test_results/test_0304_mot_4 \
       --action-chunk 1
   done
 done

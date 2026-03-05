@@ -79,8 +79,8 @@ def model_load(args):
     tokenizer = vl_chat_processor.tokenizer
 
     vl_gpt: MultiModalityCausalLM = AutoModelForCausalLM.from_pretrained(
-        args.model_path, trust_remote_code=True, torch_dtype=torch.bfloat16,
-        diff=False, flow=True, action_dim=7, fast_and_slow=True
+        args.model_path, trust_remote_code=True, torch_dtype=torch.bfloat16, use_pointcloud=True,
+        flow=True, action_dim=7, action_chunk=1, fast_and_slow=True
     )
     action_tokenizer = ActionTokenizer(tokenizer, need_to_sub=3)
 
