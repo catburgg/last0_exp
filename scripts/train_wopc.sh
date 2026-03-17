@@ -2,18 +2,18 @@
 
 set -e
 
-cd /path/to/last0
-export PYTHONPATH=/path/to/last0:/path/to/last0/transformers:$PYTHONPATH
+cd /mnt/nas/zhangxuheng/last0/scripts
+export PYTHONPATH=/mnt/nas/zhangxuheng/last0:/mnt/nas/zhangxuheng/last0/transformers:$PYTHONPATH
 export WANDB_MODE=online
 export CUDA_VISIBLE_DEVICES=0,1,2,3,4,5,6,7
 
-BASE_RUN_NAME="your_run_name"
-EXPERIMENT_NAME="your_experiment_name"
-OUTPUT_ROOT_DIR="../exp"
+BASE_RUN_NAME="libero_spatial_conv"
+EXPERIMENT_NAME="libero_spatial_baseline"
+OUTPUT_ROOT_DIR="/mnt/data/zhangxuheng/ckpt/exp/"
 
-DATA_JSON="/path/to/data.json"
-PRETRAIN_PATH="/path/to/Janus-Pro-1B"
-PRETRAIN_ACTION_PATH="/path/to/pretrain_action_path"
+DATA_JSON="/mnt/data/zhangxuheng/data/libero_training_data/libero_json/libero_spatial_no_noops_view2_chunk4_16_stride8_fast1_sparse_fastslow_train.json"
+PRETRAIN_PATH="/mnt/data/zhangxuheng/ckpt/pretrained/Janus-Pro-1B"
+PRETRAIN_ACTION_PATH="/mnt/data/zhangxuheng/ckpt/pretrained/LaST0_Pretrain_AE_chunk8/tfmr"
 
 NUM_PROCESSES=8
 TRAIN_BSZ=8
@@ -29,7 +29,7 @@ accelerate launch --config_file ../config/sft.yaml \
     --data_path ${DATA_JSON} \
     --data_root "" \
     --n_epochs 200 \
-    --save_freq 50 \
+    --save_freq 20 \
     --action_dim 7 \
     --action_chunk 8 \
     --train_bsz_per_gpu ${TRAIN_BSZ} \
@@ -43,7 +43,7 @@ accelerate launch --config_file ../config/sft.yaml \
     --load_action_from_latent 0 \
     --load_action_from_pretrain 1 \
     --use_latent 1 \
-    --latent_size 8 \
+    --latent_size 16 \
     --run_name ${BASE_RUN_NAME}
 
 echo ">>> LaST0 Training Finished."

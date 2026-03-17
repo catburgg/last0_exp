@@ -238,17 +238,17 @@ def cal_stats(jsonl_filename):
 
 ######## ---------main---------- #########
 
-data_root = "/path/to/data/libero/npy"
-img_save_root = "/path/to/last0/training_data/libero_images"
-json_save_root = "/path/to/last0/training_data/libero_json"
+data_root = "/mnt/data/zhangxuheng/data/libero_npy"
+img_save_root = "/mnt/data/zhangxuheng/data/libero_training_data/libero_images"
+json_save_root = "/mnt/data/zhangxuheng/data/libero_training_data/libero_json"
 
-jsonl_filename = f'{json_save_root}/libero_10_no_noops_view2_chunk4_16_stride8_fast1_sparse_fastslow_train.jsonl'
-json_file = f'{json_save_root}/libero_10_no_noops_view2_chunk4_16_stride8_fast1_sparse_fastslow_train.json'
+jsonl_filename = f'{json_save_root}/libero_spatial_no_noops_view2_chunk4_16_stride8_fast1_sparse_fastslow_train.jsonl'
+json_file = f'{json_save_root}/libero_spatial_no_noops_view2_chunk4_16_stride8_fast1_sparse_fastslow_train.json'
 task_lists = [
-  'libero_10_no_noops',
+  'libero_spatial_no_noops',
 #   'libero_goal_no_noops',
 #   'libero_object_no_noops',
-#   'libero_spatial_no_noops'
+#   'libero_10_no_noops'
 ]
 
 if not os.path.exists(json_save_root):

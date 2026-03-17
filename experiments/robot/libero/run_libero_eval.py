@@ -85,7 +85,7 @@ class GenerateConfig:
     pretrained_checkpoint: Union[str, Path] = ""     # Pretrained checkpoint path
 
     use_proprio: bool = False                        # Whether to include proprio state in input
-    latent_size: int = 8                             # Number of latent steps
+    latent_size: int = 16                             # Number of latent steps
     use_latent: bool = True                         # Whether to use latent
 
     center_crop: bool = False                         # Center crop? (if trained w/ random crop image aug)
@@ -136,7 +136,7 @@ def model_load(cfg: GenerateConfig):
     tokenizer = vl_chat_processor.tokenizer
     vl_gpt: MultiModalityCausalLM = AutoModelForCausalLM.from_pretrained(
         cfg.pretrained_checkpoint, trust_remote_code=True, torch_dtype=torch.bfloat16, use_latent = cfg.use_latent,
-        flow=True, action_dim=7, fast_and_slow=True, fast_image_num=1,
+        flow=True, action_dim=7, fast_and_slow=True, fast_image_num=1, action_chunk=cfg.num_open_loop_steps,
     )
     action_tokenizer = ActionTokenizer(tokenizer)
 

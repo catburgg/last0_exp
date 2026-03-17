@@ -281,6 +281,16 @@ class MultiModalityCausalLM(MultiModalityPreTrainedModel):
             self.t_embedder = TimestepEmbedder(language_config.hidden_size)
             self.final_layer = FinalLayer(language_config.hidden_size, action_dim)
 
+        if self.use_latent:
+            hidden_size = language_config.hidden_size  # 2048
+            # 4 depthwise Conv2d layers: 24×24 → 12×12 → 6×6 → 3×3 → 2×2
+            self.latent_compressor = nn.Sequential(
+                nn.Conv2d(hidden_size, hidden_size, kernel_size=3, stride=2, padding=1, groups=hidden_size),
+                nn.Conv2d(hidden_size, hidden_size, kernel_size=3, stride=2, padding=1, groups=hidden_size),
+                nn.Conv2d(hidden_size, hidden_size, kernel_size=3, stride=2, padding=1, groups=hidden_size),
+                nn.Conv2d(hidden_size, hidden_size, kernel_size=3, stride=2, padding=1, groups=hidden_size),
+            )
+
         if self.use_latent and self.use_pointcloud:
             print("Using pointcloud embedder") 
             import timm

@@ -383,6 +383,16 @@ def train(args: argparse.Namespace) -> None:
         use_latent=args.use_latent,
         ignore_mismatched_sizes=True,
     )
+    # from_pretrained uses init_empty_weights, so new modules not in the checkpoint
+    # (like latent_compressor) are left uninitialized (NaN). Re-init explicitly.
+    if args.use_latent and hasattr(model, 'latent_compressor'):
+        for m in model.latent_compressor.modules():
+            if isinstance(m, nn.Conv2d):
+                nn.init.kaiming_uniform_(m.weight, a=math.sqrt(5))
+                if m.bias is not None:
+                    fan_in = m.weight.shape[1] * m.weight.shape[2] * m.weight.shape[3]
+                    bound = 1.0 / math.sqrt(fan_in)
+                    nn.init.uniform_(m.bias, -bound, bound)
     model_action = AutoModelForCausalLM.from_pretrained(
         args.pretrain_action_path,
         trust_remote_code=True,
@@ -498,28 +508,20 @@ def train(args: argparse.Namespace) -> None:
             latent_indexes, action_indexes = create_component_indexes(inputs_embeds.shape[1], action_len) 
             
             if args.use_latent:
-                bs, n_future = batch['latent_pixel_values'].shape[0:2]
-                num_frames = batch['latent_pixel_values'].shape[1]
-                tokens_per_modality = (args.latent_size - num_frames) // num_frames
+                bs = batch['latent_pixel_values'].shape[0]
+                num_frames = batch['latent_pixel_values'].shape[1]  # 4
+                tokens_per_frame = args.latent_size // num_frames    # 4
 
                 # Process helper images
                 helper_images = rearrange(batch['latent_pixel_values'], "b n c h w -> (b n) c h w")
-                img_embeds_flat = model.aligner(model.vision_model(helper_images)) 
-                img_embeds = rearrange(img_embeds_flat, "(b n) t d -> b n t d", b=bs, n=n_future) 
-                # Compression (Average Pooling)
-                T_vis = img_embeds.shape[2]
-                group_size_img = T_vis // tokens_per_modality
-                img_chunks = torch.split(img_embeds, group_size_img, dim=2)
-                compressed_imgs = torch.cat([c.mean(dim=2, keepdim=True) for c in img_chunks[:tokens_per_modality]], dim=2) 
+                img_embeds_flat = model.aligner(model.vision_model(helper_images))
+                # img_embeds_flat: [B*4, 576, 2048]
 
-                # Process helper states
-                state_ids = batch['latent_state_ids'].to(img_embeds.device)
-                state_embeds_full = model.language_model.model.embed_tokens(state_ids) 
-                # Compress state embedding (Average Pooling)
-                compressed_state = state_embeds_full.mean(dim=2, keepdim=True) 
-
-                combined_embeds = torch.cat([compressed_imgs,compressed_state], dim=2)
-                compressed_latent_embeds = rearrange(combined_embeds, "b n k d -> b (n k) d")
+                hw = int(img_embeds_flat.shape[1] ** 0.5)  # 24
+                img_2d = rearrange(img_embeds_flat, "bn (h w) d -> bn d h w", h=hw, w=hw) # [B*4, 2048, 24, 24]
+                compressed_2d = model.latent_compressor(img_2d) # [B*4, 2048, 2, 2]
+                compressed_flat = rearrange(compressed_2d, "bn d h w -> bn (h w) d") # [B*4, 4, 2048]
+                compressed_latent_embeds = rearrange(compressed_flat, "(b n) k d -> b (n k) d", b=bs, n=num_frames) # [B, 16, 2048]
                 compressed_latent_embeds = compressed_latent_embeds.to(inputs_embeds.dtype)
 
                 latent_start_id = processor.tokenizer.convert_tokens_to_ids("<|latent_start|>")
@@ -570,9 +572,9 @@ def train(args: argparse.Namespace) -> None:
                     pred_embeddings_list.append(current_preds)
 
                 inferred_embeddings_all = torch.stack(pred_embeddings_list, dim=0)
-                
+
                 similarity = F.cosine_similarity(
-                    inferred_embeddings_all.to(torch.float32), 
+                    inferred_embeddings_all.to(torch.float32),
                     compressed_latent_embeds.to(torch.float32), 
                     dim=-1
                 ).mean()

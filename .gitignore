@@ -7,3 +7,6 @@ vis_results
 vis_scripts
 rollouts
 test_results
+
+__pycache__/
+*.pyc
