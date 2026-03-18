@@ -17,6 +17,7 @@
 # IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
 # CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
+import os
 import torch
 from attrdict import AttrDict
 from einops import rearrange
@@ -228,8 +229,11 @@ class MultiModalityCausalLM(MultiModalityPreTrainedModel):
                 use_pointcloud = False,
                 fast_and_slow = False,
                 fast_image_num = 1,
+                cosmos_scale_factor = None,
             ):
         super().__init__(config)
+        if cosmos_scale_factor is not None:
+            self.config.cosmos_scale_factor = cosmos_scale_factor
         self.flow = flow
         self.use_pointcloud = use_pointcloud
         self.fast_and_slow = fast_and_slow
@@ -282,14 +286,51 @@ class MultiModalityCausalLM(MultiModalityPreTrainedModel):
             self.final_layer = FinalLayer(language_config.hidden_size, action_dim)
 
         if self.use_latent:
-            hidden_size = language_config.hidden_size  # 2048
-            # 4 depthwise Conv2d layers: 24×24 → 12×12 → 6×6 → 3×3 → 2×2
-            self.latent_compressor = nn.Sequential(
-                nn.Conv2d(hidden_size, hidden_size, kernel_size=3, stride=2, padding=1, groups=hidden_size),
-                nn.Conv2d(hidden_size, hidden_size, kernel_size=3, stride=2, padding=1, groups=hidden_size),
-                nn.Conv2d(hidden_size, hidden_size, kernel_size=3, stride=2, padding=1, groups=hidden_size),
-                nn.Conv2d(hidden_size, hidden_size, kernel_size=3, stride=2, padding=1, groups=hidden_size),
+            from janus.models.cosmos_tokenizer.image_lib import ImageTokenizer
+
+            hidden_size = language_config.hidden_size
+            vae_dim = 16
+            sf = int(getattr(self.config, "cosmos_scale_factor", 8))
+            if sf <= 0:
+                raise ValueError(f"cosmos_scale_factor must be positive, got {sf}")
+
+            cosmos_ckpt_dir = os.environ.get(
+                "COSMOS_TOKENIZER_DIR",
+                "/mnt/data/zhangxuheng/ckpt/pretrained/Cosmos-Tokenizer-CI8x8",
             )
+            self.cosmos_tokenizer = ImageTokenizer(
+                checkpoint_enc=f"{cosmos_ckpt_dir}/encoder.jit",
+                checkpoint_dec=f"{cosmos_ckpt_dir}/decoder.jit",
+            )
+            for p in self.cosmos_tokenizer.parameters():
+                p.requires_grad = False
+
+            # InternVLA-style gen branch: latent feature -> downsample tokens -> upsample -> latent feature
+            self.gen_in_proj = nn.Conv2d(in_channels=vae_dim, out_channels=hidden_size, kernel_size=1, stride=1, padding=0)
+            self.downsample_conv = nn.Conv2d(
+                in_channels=hidden_size,
+                out_channels=hidden_size,
+                kernel_size=sf,
+                stride=sf,
+                padding=0,
+            )
+            self.upsample_conv = nn.ConvTranspose2d(
+                in_channels=hidden_size,
+                out_channels=hidden_size,
+                kernel_size=sf,
+                stride=sf,
+                padding=0,
+                output_padding=0,
+            )
+            self.gen_out_layer_norm = nn.LayerNorm(hidden_size)
+            self.gen_out_proj = nn.Linear(hidden_size, vae_dim)
+
+            # Backward-compatible aliases used by existing scripts.
+            self.cosmos_in_proj = self.gen_in_proj
+            self.latent_compressor = self.downsample_conv
+            self.latent_decompressor = self.upsample_conv
+            self.latent_recon_norm = self.gen_out_layer_norm
+            self.cosmos_out_proj = self.gen_out_proj
 
         if self.use_latent and self.use_pointcloud:
             print("Using pointcloud embedder") 
@@ -581,5 +622,4 @@ AutoConfig.register("gen_aligner", GenAlignerConfig)
 AutoConfig.register("gen_head", GenHeadConfig)
 AutoConfig.register("multi_modality", MultiModalityConfig)
 AutoModelForCausalLM.register(MultiModalityConfig, MultiModalityCausalLM)
-
 

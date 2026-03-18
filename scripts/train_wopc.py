@@ -72,35 +72,102 @@ def create_component_indexes(seq_len, action_len=7):
     return latent_indexes, action_indexes
 
 
+def infer_latent_side(latent_size: int, num_frames: int) -> int:
+    if num_frames <= 0:
+        raise ValueError(f"num_frames must be positive, got {num_frames}")
+    if latent_size % num_frames != 0:
+        raise ValueError(f"latent_size ({latent_size}) must be divisible by num_frames ({num_frames})")
+    tokens_per_frame = latent_size // num_frames
+    side = math.isqrt(tokens_per_frame)
+    if side * side != tokens_per_frame:
+        raise ValueError(
+            f"tokens_per_frame ({tokens_per_frame}) must be a perfect square "
+            f"(latent_size={latent_size}, num_frames={num_frames})"
+        )
+    return side
+
+
+def denormalize_to_01(images: torch.Tensor, image_mean, image_std) -> torch.Tensor:
+    mean = torch.tensor(image_mean, dtype=images.dtype, device=images.device).view(1, -1, 1, 1)
+    std = torch.tensor(image_std, dtype=images.dtype, device=images.device).view(1, -1, 1, 1)
+    pixels = images * std + mean
+    return pixels.clamp(0.0, 1.0)
+
+
+def convert_to_cosmos_input(images: torch.Tensor, image_mean, image_std) -> torch.Tensor:
+    # Input images are normalized by VLM image processor; recover to [0, 1] first.
+    pixels01 = denormalize_to_01(images.float(), image_mean, image_std)
+    pixels256 = F.interpolate(pixels01, size=(256, 256), mode="bilinear", align_corners=False)
+    return pixels256 * 2.0 - 1.0
+
+
+def build_pred_latent_features(
+    inferred_embeddings_all: torch.Tensor,
+    batch_size: int,
+    num_frames: int,
+    target_side: int,
+    model,
+) -> torch.Tensor:
+    hidden_size = inferred_embeddings_all.shape[-1]
+    inferred_2d = rearrange(
+        inferred_embeddings_all,
+        "b (n h w) d -> (b n) d h w",
+        n=num_frames,
+        h=target_side,
+        w=target_side,
+    )
+    upsampled = model.upsample_conv(inferred_2d)
+    h_upsampled, w_upsampled = upsampled.shape[-2:]
+    upsampled = upsampled.permute(0, 2, 3, 1).reshape(batch_size * num_frames, -1, hidden_size)
+    pred_latent = model.gen_out_proj(model.gen_out_layer_norm(upsampled))
+    pred_latent = pred_latent.view(batch_size * num_frames, h_upsampled, w_upsampled, pred_latent.shape[-1])
+    pred_latent = pred_latent.permute(0, 3, 1, 2).contiguous()
+    return pred_latent
+
+
 class TrainingMetrics:
     def __init__(self, device):
         self.n_step = 0
         self.action_total = torch.Tensor([0]).to(device=device)
         self.action_loss = torch.Tensor([0]).to(device=device)
         self.sim_loss = torch.Tensor([0]).to(device=device)
+        self.recon_loss = torch.Tensor([0]).to(device=device)
         self.world_size = dist.get_world_size()
 
-    def __call__(self, action_loss, sim_loss):
-        return self.update(action_loss, sim_loss)
+    def __call__(self, action_loss, sim_loss, recon_loss=None):
+        return self.update(action_loss, sim_loss, recon_loss)
 
-    def update(self, action_loss, sim_loss):
+    def update(self, action_loss, sim_loss, recon_loss=None):
         self.n_step += 1
         with torch.no_grad():
             self.action_loss += action_loss.item()
             self.sim_loss += sim_loss.item()
+            if recon_loss is not None:
+                self.recon_loss += recon_loss.item()
 
     def get_metric(self, reset=True):
         dist.all_reduce(self.action_loss, op=torch.distributed.ReduceOp.SUM)
         dist.all_reduce(self.sim_loss, op=torch.distributed.ReduceOp.SUM)
+        dist.all_reduce(self.recon_loss, op=torch.distributed.ReduceOp.SUM)
 
         action_loss = self.action_loss.item() / (self.world_size * self.n_step)
         sim_loss = self.sim_loss.item() / (self.world_size * self.n_step)
+        recon_loss = self.recon_loss.item() / (self.world_size * self.n_step)
 
         if reset:
             self.n_step = 0
             self.action_loss.fill_(0)
             self.sim_loss.fill_(0)
-        return action_loss, sim_loss
+            self.recon_loss.fill_(0)
+        return action_loss, sim_loss, recon_loss
+
+    def get_metric_action(self, reset=True):
+        dist.all_reduce(self.action_loss, op=torch.distributed.ReduceOp.SUM)
+        action_loss = self.action_loss.item() / (self.world_size * self.n_step)
+        if reset:
+            self.n_step = 0
+            self.action_loss.fill_(0)
+        return action_loss, 0.0, 0.0
 
 
 class SftDataset(Dataset):
@@ -372,6 +439,34 @@ def train(args: argparse.Namespace) -> None:
         args.pretrain_path,
         trust_remote_code=True
     )
+    if args.use_latent:
+        if args.latent_size not in (4, 16, 64):
+            raise ValueError(f"Only latent_size in [4, 16, 64] is supported, got {args.latent_size}")
+        num_frames_for_scale = 4
+        target_side_for_scale = infer_latent_side(args.latent_size, num_frames_for_scale)
+
+        from janus.models.cosmos_tokenizer.image_lib import ImageTokenizer
+
+        cosmos_ckpt_dir = os.environ.get(
+            "COSMOS_TOKENIZER_DIR",
+            "/mnt/data/zhangxuheng/ckpt/pretrained/Cosmos-Tokenizer-CI8x8",
+        )
+        probe_tokenizer = ImageTokenizer(
+            checkpoint_enc=f"{cosmos_ckpt_dir}/encoder.jit",
+            checkpoint_dec=f"{cosmos_ckpt_dir}/decoder.jit",
+        )
+        with torch.no_grad():
+            probe_latent = probe_tokenizer.encode(torch.zeros(1, 3, 256, 256, dtype=torch.float32).to(accelerator.device))
+        cosmos_side = int(probe_latent.shape[-1])
+        if cosmos_side % target_side_for_scale != 0:
+            raise ValueError(
+                f"cosmos latent side ({cosmos_side}) must be divisible by target side ({target_side_for_scale})"
+            )
+        cosmos_scale_factor = cosmos_side // target_side_for_scale
+        del probe_tokenizer
+    else:
+        cosmos_scale_factor = None
+
     model = AutoModelForCausalLM.from_pretrained(
         args.pretrain_path,
         trust_remote_code=True,
@@ -381,18 +476,40 @@ def train(args: argparse.Namespace) -> None:
         action_chunk=args.action_chunk,
         use_pointcloud=False,
         use_latent=args.use_latent,
+        cosmos_scale_factor=cosmos_scale_factor,
         ignore_mismatched_sizes=True,
     )
-    # from_pretrained uses init_empty_weights, so new modules not in the checkpoint
-    # (like latent_compressor) are left uninitialized (NaN). Re-init explicitly.
-    if args.use_latent and hasattr(model, 'latent_compressor'):
-        for m in model.latent_compressor.modules():
-            if isinstance(m, nn.Conv2d):
-                nn.init.kaiming_uniform_(m.weight, a=math.sqrt(5))
-                if m.bias is not None:
-                    fan_in = m.weight.shape[1] * m.weight.shape[2] * m.weight.shape[3]
-                    bound = 1.0 / math.sqrt(fan_in)
-                    nn.init.uniform_(m.bias, -bound, bound)
+    if args.use_latent:
+        accelerator.print(
+            f"latent_size={args.latent_size}, target_side={target_side_for_scale}, "
+            f"cosmos_scale_factor={cosmos_scale_factor}"
+        )
+        # Re-init newly introduced modules that are not in pretrained checkpoint.
+        for mname, m in model.named_modules():
+            if any(
+                mname.startswith(prefix)
+                for prefix in [
+                    "gen_in_proj",
+                    "downsample_conv",
+                    "upsample_conv",
+                    "gen_out_proj",
+                    "gen_out_layer_norm",
+                ]
+            ):
+                if isinstance(m, (nn.Conv2d, nn.ConvTranspose2d)):
+                    nn.init.kaiming_uniform_(m.weight, a=math.sqrt(5))
+                    if m.bias is not None:
+                        fan_in = m.weight.shape[1] * m.weight.shape[2] * m.weight.shape[3]
+                        bound = 1.0 / math.sqrt(fan_in)
+                        nn.init.uniform_(m.bias, -bound, bound)
+                elif isinstance(m, nn.Linear):
+                    nn.init.xavier_uniform_(m.weight)
+                    if m.bias is not None:
+                        nn.init.zeros_(m.bias)
+                elif isinstance(m, nn.LayerNorm):
+                    nn.init.ones_(m.weight)
+                    nn.init.zeros_(m.bias)
+
     model_action = AutoModelForCausalLM.from_pretrained(
         args.pretrain_action_path,
         trust_remote_code=True,
@@ -402,6 +519,7 @@ def train(args: argparse.Namespace) -> None:
         action_chunk=args.action_chunk,
         use_pointcloud=False,
         use_latent=args.use_latent,
+        cosmos_scale_factor=cosmos_scale_factor,
         ignore_mismatched_sizes=True,
     )
 
@@ -423,7 +541,7 @@ def train(args: argparse.Namespace) -> None:
             accelerator.print(f"Initialized {name} from {name}")
             param.requires_grad = True
         else:
-            if any(name.startswith(prefix) for prefix in ["vision_model", "aligner", "gen_vision_model"]):
+            if any(name.startswith(prefix) for prefix in ["vision_model", "aligner", "gen_vision_model", "cosmos_tokenizer"]):
                 param.requires_grad = False
             else:
                 param.requires_grad = True
@@ -478,6 +596,8 @@ def train(args: argparse.Namespace) -> None:
     metric = TrainingMetrics(device=torch.cuda.current_device())
     model.train()
     global_step = 0
+    image_mean = processor.image_processor.image_mean
+    image_std = processor.image_processor.image_std
 
     for epoch in range(0, args.n_epochs):
         train_iter = tqdm(train_dataloader, total=len(train_dataloader)) if accelerator.is_main_process else train_dataloader
@@ -509,23 +629,46 @@ def train(args: argparse.Namespace) -> None:
             
             if args.use_latent:
                 bs = batch['latent_pixel_values'].shape[0]
-                num_frames = batch['latent_pixel_values'].shape[1]  # 4
-                tokens_per_frame = args.latent_size // num_frames    # 4
+                num_frames = batch['latent_pixel_values'].shape[1]
+                if num_frames != 4:
+                    raise ValueError(f"Expected num_frames=4, got {num_frames}")
 
-                # Process helper images
+                # Prepare Cosmos latent features from normalized VLM images.
                 helper_images = rearrange(batch['latent_pixel_values'], "b n c h w -> (b n) c h w")
-                img_embeds_flat = model.aligner(model.vision_model(helper_images))
-                # img_embeds_flat: [B*4, 576, 2048]
-
-                hw = int(img_embeds_flat.shape[1] ** 0.5)  # 24
-                img_2d = rearrange(img_embeds_flat, "bn (h w) d -> bn d h w", h=hw, w=hw) # [B*4, 2048, 24, 24]
-                compressed_2d = model.latent_compressor(img_2d) # [B*4, 2048, 2, 2]
-                compressed_flat = rearrange(compressed_2d, "bn d h w -> bn (h w) d") # [B*4, 4, 2048]
-                compressed_latent_embeds = rearrange(compressed_flat, "(b n) k d -> b (n k) d", b=bs, n=num_frames) # [B, 16, 2048]
-                compressed_latent_embeds = compressed_latent_embeds.to(inputs_embeds.dtype)
+                cosmos_input = convert_to_cosmos_input(helper_images, image_mean, image_std)
+                with torch.no_grad():
+                    gt_latent_features = model.cosmos_tokenizer.encode(cosmos_input)
 
                 latent_start_id = processor.tokenizer.convert_tokens_to_ids("<|latent_start|>")
                 latent_pad_id = processor.tokenizer.convert_tokens_to_ids("<|latent_pad|>")
+                pad_counts = (batch['input_ids'] == latent_pad_id).sum(dim=1)
+                if not torch.all(pad_counts == pad_counts[0]):
+                    raise ValueError(f"Inconsistent latent pad counts in batch: {pad_counts.tolist()}")
+                target_latent_size = int(pad_counts[0].item())
+                if target_latent_size != args.latent_size:
+                    raise ValueError(
+                        f"latent_size mismatch between args ({args.latent_size}) and prompt pads ({target_latent_size})"
+                    )
+                target_side = infer_latent_side(target_latent_size, num_frames)
+
+                if model.gen_in_proj.weight.dtype == torch.float32:
+                    gt_latent_for_conv = gt_latent_features.to(torch.float32)
+                else:
+                    gt_latent_for_conv = gt_latent_features.to(model.gen_in_proj.weight.dtype)
+                gen_features = model.gen_in_proj(gt_latent_for_conv)
+                compressed_2d = model.downsample_conv(gen_features)
+                if compressed_2d.shape[-2:] != (target_side, target_side):
+                    raise ValueError(
+                        f"Compressed side mismatch: got {compressed_2d.shape[-2:]}, expected {(target_side, target_side)}"
+                    )
+                compressed_flat = rearrange(compressed_2d, "bn d h w -> bn (h w) d")
+                compressed_latent_embeds = rearrange(
+                    compressed_flat,
+                    "(b n) k d -> b (n k) d",
+                    b=bs,
+                    n=num_frames
+                )
+                compressed_latent_embeds = compressed_latent_embeds.to(inputs_embeds.dtype)
                 
                 pad_mask = (batch['input_ids'] == latent_pad_id)
                 extra_len = inputs_embeds.shape[1] - pad_mask.shape[1]
@@ -580,6 +723,35 @@ def train(args: argparse.Namespace) -> None:
                 ).mean()
                 sim_loss = 1.0 - similarity
 
+                if model.upsample_conv.weight.dtype == torch.float32:
+                    infer_for_recon = inferred_embeddings_all.to(torch.float32)
+                else:
+                    infer_for_recon = inferred_embeddings_all.to(model.upsample_conv.weight.dtype)
+                pred_latent_features = build_pred_latent_features(
+                    infer_for_recon,
+                    batch_size=bs,
+                    num_frames=num_frames,
+                    target_side=target_side,
+                    model=model,
+                )
+                gt_latent_features = gt_latent_features.to(torch.float32)
+                pred_latent_features = pred_latent_features.to(torch.float32)
+                if pred_latent_features.shape != gt_latent_features.shape:
+                    raise ValueError(
+                        f"Pred/GT latent feature shape mismatch: pred={pred_latent_features.shape}, "
+                        f"gt={gt_latent_features.shape}"
+                    )
+                if args.recon_mode == "latent":
+                    recon_loss = torch.tensor(0.0).to(pred_latent_features.device)
+                    # recon_loss = F.mse_loss(pred_latent_features, gt_latent_features)
+                elif args.recon_mode == "pixel":
+                    pred_pixels = model.cosmos_tokenizer.decode(pred_latent_features)
+                    with torch.no_grad():
+                        gt_pixels = model.cosmos_tokenizer.decode(gt_latent_features)
+                    recon_loss = F.mse_loss(pred_pixels.to(torch.float32), gt_pixels.to(torch.float32))
+                else:
+                    raise ValueError(f"Unsupported recon_mode: {args.recon_mode}")
+
                 # use the inferred embeddings to replace the latent embeddings
                 if pad_mask.sum() == inferred_embeddings_all.numel() // inferred_embeddings_all.shape[-1]:
                     inputs_embeds[pad_mask] = inferred_embeddings_all.reshape(-1, inferred_embeddings_all.shape[-1])
@@ -602,8 +774,8 @@ def train(args: argparse.Namespace) -> None:
                 # action loss (cross entropy)
                 predicted_noise = model.final_layer(hidden_states)[:, -(batch['target'].shape[1]):, :] # the last token is noise
                 action_loss = nn.MSELoss()(predicted_noise, batch['target'].to(predicted_noise.dtype))
-                loss = sim_loss + action_loss
-                metric(action_loss, sim_loss)
+                loss = sim_loss + action_loss + args.recon_weight * recon_loss
+                metric(action_loss, sim_loss, recon_loss)
             else:
                 latent_indexes=torch.arange(0, 0).to(inputs_embeds.device)
                 action_indexes=torch.arange(0, inputs_embeds.shape[1]).to(inputs_embeds.device)
@@ -622,7 +794,7 @@ def train(args: argparse.Namespace) -> None:
                 action_loss = nn.MSELoss()(predicted_noise, batch['target'].to(predicted_noise.dtype))
                 loss = action_loss
                 sim_loss = torch.tensor(0.0).to(action_loss.device)
-                metric(action_loss, sim_loss)
+                metric(action_loss, sim_loss, torch.tensor(0.0).to(action_loss.device))
 
             accelerator.backward(loss)
             if (global_step + 1) % accelerator.gradient_accumulation_steps == 0:
@@ -633,7 +805,7 @@ def train(args: argparse.Namespace) -> None:
                 lr_scheduler.step()
                 optimizer.zero_grad()
 
-                action_loss, sim_loss= metric.get_metric() if args.use_latent else metric.get_metric_action()
+                action_loss, sim_loss, recon_loss = metric.get_metric() if args.use_latent else metric.get_metric_action()
                 if accelerator.is_main_process:
                     train_iter.set_postfix(
                         epoch=epoch,
@@ -643,11 +815,13 @@ def train(args: argparse.Namespace) -> None:
                         length=len(batch["input_ids"][0]),
                         action_loss=f"{action_loss:.6f}",
                         sim_loss=f"{sim_loss:.6f}",
+                        recon_loss=f"{recon_loss:.6f}",
                         lr=f"{lr_scheduler.get_last_lr()[0]:.2e}"
                     )
                     wandb.log({
                         'action_loss': action_loss,
                         'sim_loss': sim_loss,
+                        'recon_loss': recon_loss,
                         'lr': lr_scheduler.get_last_lr()[0]
                     }, step=global_step)
             global_step += 1
@@ -705,6 +879,10 @@ if __name__ == '__main__':
     parser.add_argument('--fast_view_num', type=int, default=1)
     parser.add_argument('--use_latent', type=int, default=1)
     parser.add_argument('--latent_size', type=int, default=4)
+    parser.add_argument('--recon_mode', type=str, default='latent', choices=['latent', 'pixel'],
+                        help='Reconstruction loss mode: latent MSE or pixel-space MSE after decode')
+    parser.add_argument('--recon_weight', type=float, default=1.0,
+                        help='Weight for reconstruction loss in total loss')
 
     args = parser.parse_args()
     
@@ -719,4 +897,3 @@ if __name__ == '__main__':
 
     # Start training
     train(args)     
-
