@@ -22,6 +22,7 @@ from PIL import Image
 import wandb
 
 import torch
+os.environ.setdefault("TOKENIZERS_PARALLELISM", "false")
 from transformers import AutoModelForCausalLM
 from janus.models import MultiModalityCausalLM, VLChatProcessor, ActionTokenizer
 
@@ -85,11 +86,12 @@ class GenerateConfig:
     pretrained_checkpoint: Union[str, Path] = ""     # Pretrained checkpoint path
 
     use_proprio: bool = False                        # Whether to include proprio state in input
-    latent_size: int = 8                             # Number of latent steps
+    latent_size: int = 16                             # Number of latent steps
     use_latent: bool = True                         # Whether to use latent
+    vision_backend: str = "cosmos_vae"              # {"cosmos_vae","siglip"}; controls encoder choice
 
     center_crop: bool = False                         # Center crop? (if trained w/ random crop image aug)
-    num_open_loop_steps: int = 16                     # Number of actions to execute open-loop before requerying policy
+    num_open_loop_steps: int = NUM_ACTIONS_CHUNK      # Number of actions to execute open-loop before requerying policy
 
     unnorm_key: Union[str, Path] = "rlbench"                # Action un-normalization key
 
@@ -101,12 +103,15 @@ class GenerateConfig:
     num_trials_per_task: int = 50                    # Number of rollouts per task
     initial_states_path: str = "DEFAULT"             # "DEFAULT", or path to initial states JSON file
     env_img_res: int = 256                           # Resolution for environment images (not policy input resolution)
+    max_tasks: int = 0                               # If >0, only evaluate first N tasks (for quick debugging)
+    use_wrist_camera: bool = True                    # Keep wrist cam rendering; set False to profile single-camera env speed
 
     #################################################################################################################
     # Utils
     #################################################################################################################
     run_id_note: Optional[str] = None                # Extra note to add to end of run ID for logging
     local_log_dir: str = "./experiments/logs"        # Local directory for eval logs
+    save_videos: bool = True                         # Whether to save rollout videos
 
     use_wandb: bool = False                          # Whether to also log results in Weights & Biases
     wandb_entity: str = "your-wandb-entity"          # Name of WandB entity
@@ -131,12 +136,16 @@ def validate_config(cfg: GenerateConfig) -> None:
     assert cfg.task_suite_name in [suite.value for suite in TaskSuite], f"Invalid task suite: {cfg.task_suite_name}"
 
 
+
 def model_load(cfg: GenerateConfig):
     vl_chat_processor: VLChatProcessor = VLChatProcessor.from_pretrained(cfg.pretrained_checkpoint)
     tokenizer = vl_chat_processor.tokenizer
+    fast_image_num = 1 if cfg.use_wrist_camera else 0
     vl_gpt: MultiModalityCausalLM = AutoModelForCausalLM.from_pretrained(
         cfg.pretrained_checkpoint, trust_remote_code=True, torch_dtype=torch.bfloat16, use_latent = cfg.use_latent,
-        flow=True, action_dim=7, fast_and_slow=True, fast_image_num=1,
+        vision_backend=cfg.vision_backend,
+        flow=True, action_dim=7, fast_and_slow=True, fast_image_num=fast_image_num, action_chunk=cfg.num_open_loop_steps,
+        load_cosmos_tokenizer=False,
     )
     action_tokenizer = ActionTokenizer(tokenizer)
 
@@ -205,11 +214,11 @@ def load_initial_states(cfg: GenerateConfig, task_suite, task_id: int, log_file=
         return initial_states, None
 
 
-def prepare_observation(obs):
+def prepare_observation(obs, use_wrist_camera: bool = True):
     """Prepare observation for policy input."""
     # Get preprocessed images
     img = get_libero_image(obs)
-    wrist_img = get_libero_wrist_image(obs)
+    wrist_img = get_libero_wrist_image(obs) if use_wrist_camera and "robot0_eye_in_hand_image" in obs else img
 
     # Prepare observations dict
     observation = {
@@ -288,13 +297,15 @@ def run_episode(
             continue
 
         # Prepare observation
-        observation, img = prepare_observation(obs)
+        observation, img = prepare_observation(obs, use_wrist_camera=cfg.use_wrist_camera)
         replay_images.append(img)
 
         slow_image = observation['full_image']
         slow_image = [Image.fromarray(slow_image)]
-        fast_image = observation['wrist_image']
-        fast_image = [Image.fromarray(fast_image)]
+        if cfg.use_wrist_camera:
+            fast_image = [Image.fromarray(observation["wrist_image"])]
+        else:
+            fast_image = []
 
         # If action queue is empty, requery model
         if len(action_queue) == 0:
@@ -309,8 +320,8 @@ def run_episode(
                 fast_image,
                 slow_image,
             )
-            
-            action_queue.extend(actions[:8])
+
+            action_queue.extend(actions[: cfg.num_open_loop_steps])
 
         # Get action from queue
         action = action_queue.popleft()
@@ -351,7 +362,13 @@ def run_task(
     initial_states, all_initial_states = load_initial_states(cfg, task_suite, task_id, log_file)
     
     # Initialize environment and get task description
-    env, task_description = get_libero_env(task, cfg.model_family, resolution=cfg.env_img_res, seed=cfg.seed)
+    env, task_description = get_libero_env(
+        task,
+        cfg.model_family,
+        resolution=cfg.env_img_res,
+        seed=cfg.seed,
+        use_wrist_camera=cfg.use_wrist_camera,
+    )
 
     # Start episodes
     task_episodes, task_successes = 0, 0
@@ -399,9 +416,10 @@ def run_task(
             total_successes += 1
 
         # Save replay video
-        save_rollout_video(
-            replay_images, total_episodes, success=success, task_description=task_description, log_file=log_file
-        )
+        if cfg.save_videos:
+            save_rollout_video(
+                replay_images, total_episodes, success=success, task_description=task_description, log_file=log_file
+            )
 
         # Log results
         log_message(f"Success: {success}", log_file)
@@ -449,6 +467,8 @@ def eval_libero(cfg: GenerateConfig) -> float:
     benchmark_dict = benchmark.get_benchmark_dict()
     task_suite = benchmark_dict[cfg.task_suite_name]()
     num_tasks = task_suite.n_tasks
+    if getattr(cfg, "max_tasks", 0) and cfg.max_tasks > 0:
+        num_tasks = min(num_tasks, int(cfg.max_tasks))
 
     log_message(f"Task suite: {cfg.task_suite_name}", log_file)
 

@@ -69,13 +69,15 @@ def get_action(
     slow_image,
     state=None,
 ) -> Union[List[np.ndarray], np.ndarray]:
-
-    device = f'cuda:{cfg.cuda}'
-    vl_gpt = vl_gpt.to(device).eval()
-    parallel_size= 1
-    fast_img_len = 1
-    slow_img_len = 1
-    num_latent_tokens = cfg.latent_size
+    device = torch.device(f"cuda:{cfg.cuda}")
+    if next(vl_gpt.parameters()).device != device:
+        vl_gpt = vl_gpt.to(device)
+    vl_gpt.eval()
+    parallel_size = 1
+    slow_img_len = len(slow_image) if slow_image is not None else 0
+    fast_img_len = len(fast_image) if fast_image is not None else 0
+    use_latent = bool(getattr(cfg, "use_latent", True))
+    num_latent_tokens = int(getattr(cfg, "latent_size", 0) or 0) if use_latent else 0
     
     state_tokens = ""
     if cfg.use_proprio:
@@ -143,7 +145,7 @@ def get_action(
                 inputs_embeds=curr_inputs_embeds,
                 latent_indexes=torch.arange(0, curr_inputs_embeds.shape[1]).to(device),
                 action_indexes=torch.arange(0, 0).to(device),
-                use_latent=cfg.use_latent,
+                use_latent=use_latent,
                 use_cache=True,
                 past_key_values=kv_cache_cot if latent_i!=0 else None # for kv cache
             )
@@ -158,27 +160,10 @@ def get_action(
             hidden_states = outputs[0][:, -1:, :]
             assert hidden_states.shape[1] == 1
             kv_cache_cot = outputs.past_key_values
-            filling_indices = [
-                (instance_idx, mask_list[latent_i])
-                for instance_idx, mask_list in enumerate(latent_lists)
-                if len(mask_list) > latent_i
-            ]
-            tensor_list = [
-                [
-                    inputs_embeds[batch_idx, pos, :]
-                    for pos in range(inputs_embeds.shape[1])
-                ]
-                for batch_idx in range(inputs_embeds.shape[0])
-            ]
-            for idx_pair in filling_indices:
-                batch_idx, token_idx = idx_pair  
-                tensor_list[batch_idx][token_idx] = hidden_states[batch_idx][0]
-            inputs_embeds = torch.stack(
-                [
-                    torch.stack(tensor_list[batch_idx])
-                    for batch_idx in range(inputs_embeds.shape[0])
-                ]
-            )
+            for batch_idx, mask_list in enumerate(latent_lists):
+                if len(mask_list) > latent_i:
+                    token_idx = mask_list[latent_i]
+                    inputs_embeds[batch_idx, token_idx, :] = hidden_states[batch_idx, 0, :]
 
         noise = torch.randn(inputs_embeds.shape[0], cfg.num_open_loop_steps, 7, device=device)
         samples = vl_gpt.forward_flow(inputs_embeds, noise)
