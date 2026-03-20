@@ -229,6 +229,7 @@ class MultiModalityCausalLM(MultiModalityPreTrainedModel):
                 use_pointcloud = False,
                 fast_and_slow = False,
                 fast_image_num = 1,
+                vision_backend = 'cosmos_vae',
                 cosmos_scale_factor = None,
                 load_cosmos_tokenizer = True,
             ):
@@ -286,7 +287,7 @@ class MultiModalityCausalLM(MultiModalityPreTrainedModel):
             self.t_embedder = TimestepEmbedder(language_config.hidden_size)
             self.final_layer = FinalLayer(language_config.hidden_size, action_dim)
 
-        if self.use_latent:
+        if vision_backend == 'cosmos_vae':
             from janus.models.cosmos_tokenizer.image_lib import ImageTokenizer
 
             hidden_size = language_config.hidden_size

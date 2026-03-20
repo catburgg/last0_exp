@@ -88,7 +88,7 @@ class GenerateConfig:
     use_proprio: bool = False                        # Whether to include proprio state in input
     latent_size: int = 16                             # Number of latent steps
     use_latent: bool = True                         # Whether to use latent
-    vision_backend: str = "cosmos_vae"              # {"cosmos_vae","siglip"}; overrides use_latent/latent_size
+    vision_backend: str = "cosmos_vae"              # {"cosmos_vae","siglip"}; controls encoder choice
 
     center_crop: bool = False                         # Center crop? (if trained w/ random crop image aug)
     num_open_loop_steps: int = NUM_ACTIONS_CHUNK      # Number of actions to execute open-loop before requerying policy
@@ -135,15 +135,6 @@ def validate_config(cfg: GenerateConfig) -> None:
     # Validate task suite
     assert cfg.task_suite_name in [suite.value for suite in TaskSuite], f"Invalid task suite: {cfg.task_suite_name}"
 
-    # Normalize vision backend behavior
-    if getattr(cfg, "vision_backend", None) in ("cosmos_vae", "siglip"):
-        if cfg.vision_backend == "cosmos_vae":
-            cfg.use_latent = True
-            if cfg.latent_size <= 0:
-                cfg.latent_size = 16
-        else:
-            cfg.use_latent = False
-            cfg.latent_size = 0
 
 
 def model_load(cfg: GenerateConfig):
@@ -152,6 +143,7 @@ def model_load(cfg: GenerateConfig):
     fast_image_num = 1 if cfg.use_wrist_camera else 0
     vl_gpt: MultiModalityCausalLM = AutoModelForCausalLM.from_pretrained(
         cfg.pretrained_checkpoint, trust_remote_code=True, torch_dtype=torch.bfloat16, use_latent = cfg.use_latent,
+        vision_backend=cfg.vision_backend,
         flow=True, action_dim=7, fast_and_slow=True, fast_image_num=fast_image_num, action_chunk=cfg.num_open_loop_steps,
         load_cosmos_tokenizer=False,
     )

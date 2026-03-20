@@ -439,7 +439,7 @@ def train(args: argparse.Namespace) -> None:
         args.pretrain_path,
         trust_remote_code=True
     )
-    if args.use_latent:
+    if args.vision_backend == 'cosmos_vae':
         if args.latent_size not in (4, 16, 64):
             raise ValueError(f"Only latent_size in [4, 16, 64] is supported, got {args.latent_size}")
         num_frames_for_scale = 4
@@ -476,10 +476,11 @@ def train(args: argparse.Namespace) -> None:
         action_chunk=args.action_chunk,
         use_pointcloud=False,
         use_latent=args.use_latent,
+        vision_backend=args.vision_backend,
         cosmos_scale_factor=cosmos_scale_factor,
         ignore_mismatched_sizes=True,
     )
-    if args.use_latent:
+    if args.vision_backend == 'cosmos_vae':
         accelerator.print(
             f"latent_size={args.latent_size}, target_side={target_side_for_scale}, "
             f"cosmos_scale_factor={cosmos_scale_factor}"
@@ -519,6 +520,7 @@ def train(args: argparse.Namespace) -> None:
         action_chunk=args.action_chunk,
         use_pointcloud=False,
         use_latent=args.use_latent,
+        vision_backend=args.vision_backend,
         cosmos_scale_factor=cosmos_scale_factor,
         ignore_mismatched_sizes=True,
     )
@@ -627,7 +629,7 @@ def train(args: argparse.Namespace) -> None:
             action_len = 1 + 578 * fast_img_len + 1 + args.action_chunk
             latent_indexes, action_indexes = create_component_indexes(inputs_embeds.shape[1], action_len) 
             
-            if args.use_latent:
+            if args.vision_backend == 'cosmos_vae':
                 bs = batch['latent_pixel_values'].shape[0]
                 num_frames = batch['latent_pixel_values'].shape[1]
                 if num_frames != 4:
@@ -880,23 +882,13 @@ if __name__ == '__main__':
     parser.add_argument('--fast_view_num', type=int, default=1)
     parser.add_argument('--use_latent', type=int, default=1)
     parser.add_argument('--latent_size', type=int, default=4)
-    parser.add_argument('--vision_backend', type=str, default=None, choices=['cosmos_vae', 'siglip'])
+    parser.add_argument('--vision_backend', type=str, default='cosmos_vae', choices=['cosmos_vae', 'siglip'])
     parser.add_argument('--recon_mode', type=str, default='latent', choices=['latent', 'pixel'])
     parser.add_argument('--recon_weight', type=float, default=1.0)
     parser.add_argument('--sim_weight', type=float, default=1.0)
 
     args = parser.parse_args()
 
-    # Normalize vision backend behavior (backward compatible by default)
-    if args.vision_backend is not None:
-        if args.vision_backend == 'cosmos_vae':
-            args.use_latent = 1
-            if args.latent_size <= 0:
-                args.latent_size = 4
-        else:
-            args.use_latent = 0
-            args.latent_size = 0
-    
     # Set paths
     args.log_dir = os.path.join(args.log_dir, args.experiment_name)
     args.output_dir = os.path.join(args.output_dir, args.experiment_name)

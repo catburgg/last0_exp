@@ -76,11 +76,7 @@ def get_action(
     parallel_size = 1
     slow_img_len = len(slow_image) if slow_image is not None else 0
     fast_img_len = len(fast_image) if fast_image is not None else 0
-    vision_backend = getattr(cfg, "vision_backend", None)
-    if vision_backend in ("cosmos_vae", "siglip"):
-        use_latent = (vision_backend == "cosmos_vae")
-    else:
-        use_latent = bool(getattr(cfg, "use_latent", True))
+    use_latent = bool(getattr(cfg, "use_latent", True))
     num_latent_tokens = int(getattr(cfg, "latent_size", 0) or 0) if use_latent else 0
     
     state_tokens = ""
