@@ -230,6 +230,7 @@ class MultiModalityCausalLM(MultiModalityPreTrainedModel):
                 fast_and_slow = False,
                 fast_image_num = 1,
                 cosmos_scale_factor = None,
+                load_cosmos_tokenizer = True,
             ):
         super().__init__(config)
         if cosmos_scale_factor is not None:
@@ -298,12 +299,15 @@ class MultiModalityCausalLM(MultiModalityPreTrainedModel):
                 "COSMOS_TOKENIZER_DIR",
                 "/mnt/data/zhangxuheng/ckpt/pretrained/Cosmos-Tokenizer-CI8x8",
             )
-            self.cosmos_tokenizer = ImageTokenizer(
-                checkpoint_enc=f"{cosmos_ckpt_dir}/encoder.jit",
-                checkpoint_dec=f"{cosmos_ckpt_dir}/decoder.jit",
-            )
-            for p in self.cosmos_tokenizer.parameters():
-                p.requires_grad = False
+            if load_cosmos_tokenizer:
+                self.cosmos_tokenizer = ImageTokenizer(
+                    checkpoint_enc=f"{cosmos_ckpt_dir}/encoder.jit",
+                    checkpoint_dec=f"{cosmos_ckpt_dir}/decoder.jit",
+                )
+                for p in self.cosmos_tokenizer.parameters():
+                    p.requires_grad = False
+            else:
+                self.cosmos_tokenizer = None
 
             # InternVLA-style gen branch: latent feature -> downsample tokens -> upsample -> latent feature
             self.gen_in_proj = nn.Conv2d(in_channels=vae_dim, out_channels=hidden_size, kernel_size=1, stride=1, padding=0)
@@ -483,20 +487,12 @@ class MultiModalityCausalLM(MultiModalityPreTrainedModel):
 
         while time >= -dt / 2:
             expanded_time = time.expand(noisy_actions.shape[0])
-            if self.use_latent:
-                v_t, past_key_values = self.denoise_step(
-                    inputs_embeds,
-                    past_key_values,
-                    x_t,
-                    expanded_time,
-                )
-            else: # for use_latent=False
-                v_t, past_key_values = self.denoise_step_action(
-                    inputs_embeds,
-                    past_key_values,
-                    x_t,
-                    expanded_time,
-                )
+            v_t, past_key_values = self.denoise_step(
+                inputs_embeds,
+                past_key_values,
+                x_t,
+                expanded_time,
+            )
             # Euler step - use new tensor assignment instead of in-place operation
             x_t = x_t + dt * v_t
             time += dt

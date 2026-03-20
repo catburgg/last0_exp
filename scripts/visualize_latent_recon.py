@@ -1,11 +1,24 @@
 import argparse
 import os
 import math
+import sys
 import torch
 import torch.nn.functional as F
 import torchvision.utils as vutils
 from einops import rearrange
-from transformers import AutoModelForCausalLM
+from transformers import AutoConfig, AutoModelForCausalLM
+from transformers.modeling_utils import load_sharded_checkpoint
+
+# Make script runnable without externally setting PYTHONPATH.
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+REPO_ROOT = os.path.dirname(SCRIPT_DIR)
+TRANSFORMERS_ROOT = os.path.join(REPO_ROOT, "transformers")
+if SCRIPT_DIR not in sys.path:
+    sys.path.insert(0, SCRIPT_DIR)
+if REPO_ROOT not in sys.path:
+    sys.path.insert(0, REPO_ROOT)
+if TRANSFORMERS_ROOT not in sys.path:
+    sys.path.insert(0, TRANSFORMERS_ROOT)
 
 from train_wopc import SftDataset, create_component_indexes
 from janus.models import VLChatProcessor
@@ -69,22 +82,28 @@ def probe_cosmos_scale_factor(latent_size: int, num_frames: int) -> int:
         checkpoint_dec=f"{cosmos_ckpt_dir}/decoder.jit",
     )
     with torch.no_grad():
-        probe = tokenizer.encode(torch.zeros(1, 3, 256, 256, dtype=torch.float32))
+        probe_device = next(tokenizer.parameters()).device
+        probe = tokenizer.encode(torch.zeros(1, 3, 256, 256, dtype=torch.float32, device=probe_device))
     cosmos_side = int(probe.shape[-1])
     if cosmos_side % target_side != 0:
         raise ValueError(f"cosmos_side ({cosmos_side}) is not divisible by target_side ({target_side})")
     return cosmos_side // target_side
 
 
-def save_four_frame_grid(gt_images, pred_images, save_path):
+def save_four_frame_grid(gt_images, pred_images, save_path, compressed_images=None):
     # Input shape: [4, 3, H, W], values expected in [-1, 1]
     gt_vis = ((gt_images + 1.0) / 2.0).clamp(0.0, 1.0)
     pred_vis = ((pred_images + 1.0) / 2.0).clamp(0.0, 1.0)
     panels = []
     for i in range(gt_vis.shape[0]):
         panels.append(gt_vis[i])
+    for i in range(pred_vis.shape[0]):
         panels.append(pred_vis[i])
-    grid = vutils.make_grid(torch.stack(panels, dim=0), nrow=2, padding=4)
+    if compressed_images is not None:
+        comp_vis = ((compressed_images + 1.0) / 2.0).clamp(0.0, 1.0)
+        for i in range(comp_vis.shape[0]):
+            panels.append(comp_vis[i])
+    grid = vutils.make_grid(torch.stack(panels, dim=0), nrow=gt_vis.shape[0], padding=4)
     vutils.save_image(grid, save_path)
 
 
@@ -99,6 +118,7 @@ def main():
     parser.add_argument("--action_dim", type=int, default=7)
     parser.add_argument("--action_chunk", type=int, default=8)
     parser.add_argument("--robot_state", action="store_true")
+    parser.add_argument("--use_latent", type=int, default=1)
     args = parser.parse_args()
 
     os.makedirs(args.output_dir, exist_ok=True)
@@ -107,8 +127,9 @@ def main():
     num_frames = 4
     scale_factor = probe_cosmos_scale_factor(args.latent_size, num_frames)
     processor = VLChatProcessor.from_pretrained(args.checkpoint_path, trust_remote_code=True)
-    model = AutoModelForCausalLM.from_pretrained(
-        args.checkpoint_path,
+    config = AutoConfig.from_pretrained(args.checkpoint_path, trust_remote_code=True)
+    model = AutoModelForCausalLM.from_config(
+        config,
         trust_remote_code=True,
         torch_dtype=torch.bfloat16,
         flow=True,
@@ -117,8 +138,13 @@ def main():
         use_pointcloud=False,
         use_latent=1,
         cosmos_scale_factor=scale_factor,
-        ignore_mismatched_sizes=True,
-    ).to(device)
+    )
+    load_result = load_sharded_checkpoint(model, args.checkpoint_path, strict=False, prefer_safe=True)
+    if load_result.unexpected_keys:
+        print(f"[warn] ignored unexpected keys: {len(load_result.unexpected_keys)}")
+    if load_result.missing_keys:
+        print(f"[warn] missing keys after load: {len(load_result.missing_keys)}")
+    model = model.to(device)
     model.eval()
 
     ds = SftDataset(args, processor, DummyAccelerator(), model)
@@ -207,8 +233,18 @@ def main():
             pred_pixels = rearrange(pred_pixels, "(b n) c h w -> b n c h w", b=1, n=num_frames)[0]
             gt_pixels = rearrange(gt_pixels, "(b n) c h w -> b n c h w", b=1, n=num_frames)[0]
 
+            # GT through downsample/upsample bottleneck (no language model)
+            gt_compressed_2d = model.downsample_conv(model.gen_in_proj(gt_latent_features.to(model.gen_in_proj.weight.dtype)))
+            gt_upsampled = model.upsample_conv(gt_compressed_2d)
+            h_up, w_up = gt_upsampled.shape[-2:]
+            gt_upsampled_flat = gt_upsampled.permute(0, 2, 3, 1).reshape(num_frames, -1, gt_upsampled.shape[1])
+            gt_recon_latent = model.gen_out_proj(model.gen_out_layer_norm(gt_upsampled_flat))
+            gt_recon_latent = gt_recon_latent.view(num_frames, h_up, w_up, gt_recon_latent.shape[-1]).permute(0, 3, 1, 2).contiguous().to(torch.float32)
+            compressed_pixels = model.cosmos_tokenizer.decode(gt_recon_latent)
+            compressed_pixels = rearrange(compressed_pixels, "(b n) c h w -> b n c h w", b=1, n=num_frames)[0]
+
             save_path = os.path.join(args.output_dir, f"sample_{idx:04d}.png")
-            save_four_frame_grid(gt_pixels, pred_pixels, save_path)
+            save_four_frame_grid(gt_pixels, pred_pixels, save_path, compressed_images=compressed_pixels)
             print(f"Saved {save_path}")
 
 

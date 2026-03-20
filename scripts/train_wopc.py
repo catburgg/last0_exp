@@ -723,10 +723,12 @@ def train(args: argparse.Namespace) -> None:
                 ).mean()
                 sim_loss = 1.0 - similarity
 
+                # Detach so recon_loss only trains upsample/decode, not language model
+                inferred_detached = inferred_embeddings_all.detach()
                 if model.upsample_conv.weight.dtype == torch.float32:
-                    infer_for_recon = inferred_embeddings_all.to(torch.float32)
+                    infer_for_recon = inferred_detached.to(torch.float32)
                 else:
-                    infer_for_recon = inferred_embeddings_all.to(model.upsample_conv.weight.dtype)
+                    infer_for_recon = inferred_detached.to(model.upsample_conv.weight.dtype)
                 pred_latent_features = build_pred_latent_features(
                     infer_for_recon,
                     batch_size=bs,
@@ -742,8 +744,7 @@ def train(args: argparse.Namespace) -> None:
                         f"gt={gt_latent_features.shape}"
                     )
                 if args.recon_mode == "latent":
-                    recon_loss = torch.tensor(0.0).to(pred_latent_features.device)
-                    # recon_loss = F.mse_loss(pred_latent_features, gt_latent_features)
+                    recon_loss = F.mse_loss(pred_latent_features, gt_latent_features)
                 elif args.recon_mode == "pixel":
                     pred_pixels = model.cosmos_tokenizer.decode(pred_latent_features)
                     with torch.no_grad():
@@ -774,7 +775,7 @@ def train(args: argparse.Namespace) -> None:
                 # action loss (cross entropy)
                 predicted_noise = model.final_layer(hidden_states)[:, -(batch['target'].shape[1]):, :] # the last token is noise
                 action_loss = nn.MSELoss()(predicted_noise, batch['target'].to(predicted_noise.dtype))
-                loss = sim_loss + action_loss + args.recon_weight * recon_loss
+                loss = args.sim_weight * sim_loss + action_loss + args.recon_weight * recon_loss
                 metric(action_loss, sim_loss, recon_loss)
             else:
                 latent_indexes=torch.arange(0, 0).to(inputs_embeds.device)
@@ -879,12 +880,22 @@ if __name__ == '__main__':
     parser.add_argument('--fast_view_num', type=int, default=1)
     parser.add_argument('--use_latent', type=int, default=1)
     parser.add_argument('--latent_size', type=int, default=4)
-    parser.add_argument('--recon_mode', type=str, default='latent', choices=['latent', 'pixel'],
-                        help='Reconstruction loss mode: latent MSE or pixel-space MSE after decode')
-    parser.add_argument('--recon_weight', type=float, default=1.0,
-                        help='Weight for reconstruction loss in total loss')
+    parser.add_argument('--vision_backend', type=str, default=None, choices=['cosmos_vae', 'siglip'])
+    parser.add_argument('--recon_mode', type=str, default='latent', choices=['latent', 'pixel'])
+    parser.add_argument('--recon_weight', type=float, default=1.0)
+    parser.add_argument('--sim_weight', type=float, default=1.0)
 
     args = parser.parse_args()
+
+    # Normalize vision backend behavior (backward compatible by default)
+    if args.vision_backend is not None:
+        if args.vision_backend == 'cosmos_vae':
+            args.use_latent = 1
+            if args.latent_size <= 0:
+                args.latent_size = 4
+        else:
+            args.use_latent = 0
+            args.latent_size = 0
     
     # Set paths
     args.log_dir = os.path.join(args.log_dir, args.experiment_name)
