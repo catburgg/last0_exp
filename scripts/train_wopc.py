@@ -449,7 +449,7 @@ def train(args: argparse.Namespace) -> None:
 
         cosmos_ckpt_dir = os.environ.get(
             "COSMOS_TOKENIZER_DIR",
-            "/mnt/wfm/ckpt/ckpt/pretrained/Cosmos-Tokenizer-CI8x8",
+            "/mnt/dataset/share_code/hf_cache/Cosmos-0.1-Tokenizer-CI8x8",
         )
         probe_tokenizer = ImageTokenizer(
             checkpoint_enc=f"{cosmos_ckpt_dir}/encoder.jit",

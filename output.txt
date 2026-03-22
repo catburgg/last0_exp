@@ -1,0 +1,1798 @@
+[2026-03-22 20:47:54,128] [INFO] [real_accelerator.py:219:get_accelerator] Setting ds_accelerator to cuda (auto detect)
+Python version is above 3.10, patching the collections module.
+Python version is above 3.10, patching the collections module.
+[2026-03-22 20:51:33,121] [INFO] [real_accelerator.py:219:get_accelerator] Setting ds_accelerator to cuda (auto detect)
+[2026-03-22 20:51:33,121] [INFO] [real_accelerator.py:219:get_accelerator] Setting ds_accelerator to cuda (auto detect)
+[2026-03-22 20:51:50,740] [INFO] [comm.py:652:init_distributed] cdb=None
+[2026-03-22 20:51:50,741] [INFO] [comm.py:683:init_distributed] Initializing TorchBackend in DeepSpeed with backend nccl
+[2026-03-22 20:51:50,742] [INFO] [comm.py:652:init_distributed] cdb=None
+Add 259 spectial token to the tokenizer!!
+Add 259 spectial token to the tokenizer!!
+init flow components!!!
+init flow components!!!
+latent_size=16, target_side=2, cosmos_scale_factor=16
+init flow components!!!
+init flow components!!!
+Initialized language_model.model.layers.0.self_attn.q_proj_action.weight from language_model.model.layers.0.self_attn.q_proj.weight
+Initialized language_model.model.layers.0.self_attn.k_proj_action.weight from language_model.model.layers.0.self_attn.k_proj.weight
+Initialized language_model.model.layers.0.self_attn.v_proj_action.weight from language_model.model.layers.0.self_attn.v_proj.weight
+Initialized language_model.model.layers.0.self_attn.o_proj_action.weight from language_model.model.layers.0.self_attn.o_proj.weight
+Initialized language_model.model.layers.0.mlp_action.gate_proj.weight from language_model.model.layers.0.mlp.gate_proj.weight
+Initialized language_model.model.layers.0.mlp_action.up_proj.weight from language_model.model.layers.0.mlp.up_proj.weight
+Initialized language_model.model.layers.0.mlp_action.down_proj.weight from language_model.model.layers.0.mlp.down_proj.weight
+Initialized language_model.model.layers.0.input_layernorm_action.weight from language_model.model.layers.0.input_layernorm.weight
+Initialized language_model.model.layers.0.post_attention_layernorm_action.weight from language_model.model.layers.0.post_attention_layernorm.weight
+Initialized language_model.model.layers.1.self_attn.q_proj_action.weight from language_model.model.layers.1.self_attn.q_proj.weight
+Initialized language_model.model.layers.1.self_attn.k_proj_action.weight from language_model.model.layers.1.self_attn.k_proj.weight
+Initialized language_model.model.layers.1.self_attn.v_proj_action.weight from language_model.model.layers.1.self_attn.v_proj.weight
+Initialized language_model.model.layers.1.self_attn.o_proj_action.weight from language_model.model.layers.1.self_attn.o_proj.weight
+Initialized language_model.model.layers.1.mlp_action.gate_proj.weight from language_model.model.layers.1.mlp.gate_proj.weight
+Initialized language_model.model.layers.1.mlp_action.up_proj.weight from language_model.model.layers.1.mlp.up_proj.weight
+Initialized language_model.model.layers.1.mlp_action.down_proj.weight from language_model.model.layers.1.mlp.down_proj.weight
+Initialized language_model.model.layers.1.input_layernorm_action.weight from language_model.model.layers.1.input_layernorm.weight
+Initialized language_model.model.layers.1.post_attention_layernorm_action.weight from language_model.model.layers.1.post_attention_layernorm.weight
+Initialized language_model.model.layers.2.self_attn.q_proj_action.weight from language_model.model.layers.2.self_attn.q_proj.weight
+Initialized language_model.model.layers.2.self_attn.k_proj_action.weight from language_model.model.layers.2.self_attn.k_proj.weight
+Initialized language_model.model.layers.2.self_attn.v_proj_action.weight from language_model.model.layers.2.self_attn.v_proj.weight
+Initialized language_model.model.layers.2.self_attn.o_proj_action.weight from language_model.model.layers.2.self_attn.o_proj.weight
+Initialized language_model.model.layers.2.mlp_action.gate_proj.weight from language_model.model.layers.2.mlp.gate_proj.weight
+Initialized language_model.model.layers.2.mlp_action.up_proj.weight from language_model.model.layers.2.mlp.up_proj.weight
+Initialized language_model.model.layers.2.mlp_action.down_proj.weight from language_model.model.layers.2.mlp.down_proj.weight
+Initialized language_model.model.layers.2.input_layernorm_action.weight from language_model.model.layers.2.input_layernorm.weight
+Initialized language_model.model.layers.2.post_attention_layernorm_action.weight from language_model.model.layers.2.post_attention_layernorm.weight
+Initialized language_model.model.layers.3.self_attn.q_proj_action.weight from language_model.model.layers.3.self_attn.q_proj.weight
+Initialized language_model.model.layers.3.self_attn.k_proj_action.weight from language_model.model.layers.3.self_attn.k_proj.weight
+Initialized language_model.model.layers.3.self_attn.v_proj_action.weight from language_model.model.layers.3.self_attn.v_proj.weight
+Initialized language_model.model.layers.3.self_attn.o_proj_action.weight from language_model.model.layers.3.self_attn.o_proj.weight
+Initialized language_model.model.layers.3.mlp_action.gate_proj.weight from language_model.model.layers.3.mlp.gate_proj.weight
+Initialized language_model.model.layers.3.mlp_action.up_proj.weight from language_model.model.layers.3.mlp.up_proj.weight
+Initialized language_model.model.layers.3.mlp_action.down_proj.weight from language_model.model.layers.3.mlp.down_proj.weight
+Initialized language_model.model.layers.3.input_layernorm_action.weight from language_model.model.layers.3.input_layernorm.weight
+Initialized language_model.model.layers.3.post_attention_layernorm_action.weight from language_model.model.layers.3.post_attention_layernorm.weight
+Initialized language_model.model.layers.4.self_attn.q_proj_action.weight from language_model.model.layers.4.self_attn.q_proj.weight
+Initialized language_model.model.layers.4.self_attn.k_proj_action.weight from language_model.model.layers.4.self_attn.k_proj.weight
+Initialized language_model.model.layers.4.self_attn.v_proj_action.weight from language_model.model.layers.4.self_attn.v_proj.weight
+Initialized language_model.model.layers.4.self_attn.o_proj_action.weight from language_model.model.layers.4.self_attn.o_proj.weight
+Initialized language_model.model.layers.4.mlp_action.gate_proj.weight from language_model.model.layers.4.mlp.gate_proj.weight
+Initialized language_model.model.layers.4.mlp_action.up_proj.weight from language_model.model.layers.4.mlp.up_proj.weight
+Initialized language_model.model.layers.4.mlp_action.down_proj.weight from language_model.model.layers.4.mlp.down_proj.weight
+Initialized language_model.model.layers.4.input_layernorm_action.weight from language_model.model.layers.4.input_layernorm.weight
+Initialized language_model.model.layers.4.post_attention_layernorm_action.weight from language_model.model.layers.4.post_attention_layernorm.weight
+Initialized language_model.model.layers.5.self_attn.q_proj_action.weight from language_model.model.layers.5.self_attn.q_proj.weight
+Initialized language_model.model.layers.5.self_attn.k_proj_action.weight from language_model.model.layers.5.self_attn.k_proj.weight
+Initialized language_model.model.layers.5.self_attn.v_proj_action.weight from language_model.model.layers.5.self_attn.v_proj.weight
+Initialized language_model.model.layers.5.self_attn.o_proj_action.weight from language_model.model.layers.5.self_attn.o_proj.weight
+Initialized language_model.model.layers.5.mlp_action.gate_proj.weight from language_model.model.layers.5.mlp.gate_proj.weight
+Initialized language_model.model.layers.5.mlp_action.up_proj.weight from language_model.model.layers.5.mlp.up_proj.weight
+Initialized language_model.model.layers.5.mlp_action.down_proj.weight from language_model.model.layers.5.mlp.down_proj.weight
+Initialized language_model.model.layers.5.input_layernorm_action.weight from language_model.model.layers.5.input_layernorm.weight
+Initialized language_model.model.layers.5.post_attention_layernorm_action.weight from language_model.model.layers.5.post_attention_layernorm.weight
+Initialized language_model.model.layers.6.self_attn.q_proj_action.weight from language_model.model.layers.6.self_attn.q_proj.weight
+Initialized language_model.model.layers.6.self_attn.k_proj_action.weight from language_model.model.layers.6.self_attn.k_proj.weight
+Initialized language_model.model.layers.6.self_attn.v_proj_action.weight from language_model.model.layers.6.self_attn.v_proj.weight
+Initialized language_model.model.layers.6.self_attn.o_proj_action.weight from language_model.model.layers.6.self_attn.o_proj.weight
+Initialized language_model.model.layers.6.mlp_action.gate_proj.weight from language_model.model.layers.6.mlp.gate_proj.weight
+Initialized language_model.model.layers.6.mlp_action.up_proj.weight from language_model.model.layers.6.mlp.up_proj.weight
+Initialized language_model.model.layers.6.mlp_action.down_proj.weight from language_model.model.layers.6.mlp.down_proj.weight
+Initialized language_model.model.layers.6.input_layernorm_action.weight from language_model.model.layers.6.input_layernorm.weight
+Initialized language_model.model.layers.6.post_attention_layernorm_action.weight from language_model.model.layers.6.post_attention_layernorm.weight
+Initialized language_model.model.layers.7.self_attn.q_proj_action.weight from language_model.model.layers.7.self_attn.q_proj.weight
+Initialized language_model.model.layers.7.self_attn.k_proj_action.weight from language_model.model.layers.7.self_attn.k_proj.weight
+Initialized language_model.model.layers.7.self_attn.v_proj_action.weight from language_model.model.layers.7.self_attn.v_proj.weight
+Initialized language_model.model.layers.7.self_attn.o_proj_action.weight from language_model.model.layers.7.self_attn.o_proj.weight
+Initialized language_model.model.layers.7.mlp_action.gate_proj.weight from language_model.model.layers.7.mlp.gate_proj.weight
+Initialized language_model.model.layers.7.mlp_action.up_proj.weight from language_model.model.layers.7.mlp.up_proj.weight
+Initialized language_model.model.layers.7.mlp_action.down_proj.weight from language_model.model.layers.7.mlp.down_proj.weight
+Initialized language_model.model.layers.7.input_layernorm_action.weight from language_model.model.layers.7.input_layernorm.weight
+Initialized language_model.model.layers.7.post_attention_layernorm_action.weight from language_model.model.layers.7.post_attention_layernorm.weight
+Initialized language_model.model.layers.8.self_attn.q_proj_action.weight from language_model.model.layers.8.self_attn.q_proj.weight
+Initialized language_model.model.layers.8.self_attn.k_proj_action.weight from language_model.model.layers.8.self_attn.k_proj.weight
+Initialized language_model.model.layers.8.self_attn.v_proj_action.weight from language_model.model.layers.8.self_attn.v_proj.weight
+Initialized language_model.model.layers.8.self_attn.o_proj_action.weight from language_model.model.layers.8.self_attn.o_proj.weight
+Initialized language_model.model.layers.8.mlp_action.gate_proj.weight from language_model.model.layers.8.mlp.gate_proj.weight
+Initialized language_model.model.layers.8.mlp_action.up_proj.weight from language_model.model.layers.8.mlp.up_proj.weight
+Initialized language_model.model.layers.8.mlp_action.down_proj.weight from language_model.model.layers.8.mlp.down_proj.weight
+Initialized language_model.model.layers.8.input_layernorm_action.weight from language_model.model.layers.8.input_layernorm.weight
+Initialized language_model.model.layers.8.post_attention_layernorm_action.weight from language_model.model.layers.8.post_attention_layernorm.weight
+Initialized language_model.model.layers.9.self_attn.q_proj_action.weight from language_model.model.layers.9.self_attn.q_proj.weight
+Initialized language_model.model.layers.9.self_attn.k_proj_action.weight from language_model.model.layers.9.self_attn.k_proj.weight
+Initialized language_model.model.layers.9.self_attn.v_proj_action.weight from language_model.model.layers.9.self_attn.v_proj.weight
+Initialized language_model.model.layers.9.self_attn.o_proj_action.weight from language_model.model.layers.9.self_attn.o_proj.weight
+Initialized language_model.model.layers.9.mlp_action.gate_proj.weight from language_model.model.layers.9.mlp.gate_proj.weight
+Initialized language_model.model.layers.9.mlp_action.up_proj.weight from language_model.model.layers.9.mlp.up_proj.weight
+Initialized language_model.model.layers.9.mlp_action.down_proj.weight from language_model.model.layers.9.mlp.down_proj.weight
+Initialized language_model.model.layers.9.input_layernorm_action.weight from language_model.model.layers.9.input_layernorm.weight
+Initialized language_model.model.layers.9.post_attention_layernorm_action.weight from language_model.model.layers.9.post_attention_layernorm.weight
+Initialized language_model.model.layers.10.self_attn.q_proj_action.weight from language_model.model.layers.10.self_attn.q_proj.weight
+Initialized language_model.model.layers.10.self_attn.k_proj_action.weight from language_model.model.layers.10.self_attn.k_proj.weight
+Initialized language_model.model.layers.10.self_attn.v_proj_action.weight from language_model.model.layers.10.self_attn.v_proj.weight
+Initialized language_model.model.layers.10.self_attn.o_proj_action.weight from language_model.model.layers.10.self_attn.o_proj.weight
+Initialized language_model.model.layers.10.mlp_action.gate_proj.weight from language_model.model.layers.10.mlp.gate_proj.weight
+Initialized language_model.model.layers.10.mlp_action.up_proj.weight from language_model.model.layers.10.mlp.up_proj.weight
+Initialized language_model.model.layers.10.mlp_action.down_proj.weight from language_model.model.layers.10.mlp.down_proj.weight
+Initialized language_model.model.layers.10.input_layernorm_action.weight from language_model.model.layers.10.input_layernorm.weight
+Initialized language_model.model.layers.10.post_attention_layernorm_action.weight from language_model.model.layers.10.post_attention_layernorm.weight
+Initialized language_model.model.layers.11.self_attn.q_proj_action.weight from language_model.model.layers.11.self_attn.q_proj.weight
+Initialized language_model.model.layers.11.self_attn.k_proj_action.weight from language_model.model.layers.11.self_attn.k_proj.weight
+Initialized language_model.model.layers.11.self_attn.v_proj_action.weight from language_model.model.layers.11.self_attn.v_proj.weight
+Initialized language_model.model.layers.11.self_attn.o_proj_action.weight from language_model.model.layers.11.self_attn.o_proj.weight
+Initialized language_model.model.layers.11.mlp_action.gate_proj.weight from language_model.model.layers.11.mlp.gate_proj.weight
+Initialized language_model.model.layers.11.mlp_action.up_proj.weight from language_model.model.layers.11.mlp.up_proj.weight
+Initialized language_model.model.layers.11.mlp_action.down_proj.weight from language_model.model.layers.11.mlp.down_proj.weight
+Initialized language_model.model.layers.11.input_layernorm_action.weight from language_model.model.layers.11.input_layernorm.weight
+Initialized language_model.model.layers.11.post_attention_layernorm_action.weight from language_model.model.layers.11.post_attention_layernorm.weight
+Initialized language_model.model.layers.12.self_attn.q_proj_action.weight from language_model.model.layers.12.self_attn.q_proj.weight
+Initialized language_model.model.layers.12.self_attn.k_proj_action.weight from language_model.model.layers.12.self_attn.k_proj.weight
+Initialized language_model.model.layers.12.self_attn.v_proj_action.weight from language_model.model.layers.12.self_attn.v_proj.weight
+Initialized language_model.model.layers.12.self_attn.o_proj_action.weight from language_model.model.layers.12.self_attn.o_proj.weight
+Initialized language_model.model.layers.12.mlp_action.gate_proj.weight from language_model.model.layers.12.mlp.gate_proj.weight
+Initialized language_model.model.layers.12.mlp_action.up_proj.weight from language_model.model.layers.12.mlp.up_proj.weight
+Initialized language_model.model.layers.12.mlp_action.down_proj.weight from language_model.model.layers.12.mlp.down_proj.weight
+Initialized language_model.model.layers.12.input_layernorm_action.weight from language_model.model.layers.12.input_layernorm.weight
+Initialized language_model.model.layers.12.post_attention_layernorm_action.weight from language_model.model.layers.12.post_attention_layernorm.weight
+Initialized language_model.model.layers.13.self_attn.q_proj_action.weight from language_model.model.layers.13.self_attn.q_proj.weight
+Initialized language_model.model.layers.13.self_attn.k_proj_action.weight from language_model.model.layers.13.self_attn.k_proj.weight
+Initialized language_model.model.layers.13.self_attn.v_proj_action.weight from language_model.model.layers.13.self_attn.v_proj.weight
+Initialized language_model.model.layers.13.self_attn.o_proj_action.weight from language_model.model.layers.13.self_attn.o_proj.weight
+Initialized language_model.model.layers.13.mlp_action.gate_proj.weight from language_model.model.layers.13.mlp.gate_proj.weight
+Initialized language_model.model.layers.13.mlp_action.up_proj.weight from language_model.model.layers.13.mlp.up_proj.weight
+Initialized language_model.model.layers.13.mlp_action.down_proj.weight from language_model.model.layers.13.mlp.down_proj.weight
+Initialized language_model.model.layers.13.input_layernorm_action.weight from language_model.model.layers.13.input_layernorm.weight
+Initialized language_model.model.layers.13.post_attention_layernorm_action.weight from language_model.model.layers.13.post_attention_layernorm.weight
+Initialized language_model.model.layers.14.self_attn.q_proj_action.weight from language_model.model.layers.14.self_attn.q_proj.weight
+Initialized language_model.model.layers.14.self_attn.k_proj_action.weight from language_model.model.layers.14.self_attn.k_proj.weight
+Initialized language_model.model.layers.14.self_attn.v_proj_action.weight from language_model.model.layers.14.self_attn.v_proj.weight
+Initialized language_model.model.layers.14.self_attn.o_proj_action.weight from language_model.model.layers.14.self_attn.o_proj.weight
+Initialized language_model.model.layers.14.mlp_action.gate_proj.weight from language_model.model.layers.14.mlp.gate_proj.weight
+Initialized language_model.model.layers.14.mlp_action.up_proj.weight from language_model.model.layers.14.mlp.up_proj.weight
+Initialized language_model.model.layers.14.mlp_action.down_proj.weight from language_model.model.layers.14.mlp.down_proj.weight
+Initialized language_model.model.layers.14.input_layernorm_action.weight from language_model.model.layers.14.input_layernorm.weight
+Initialized language_model.model.layers.14.post_attention_layernorm_action.weight from language_model.model.layers.14.post_attention_layernorm.weight
+Initialized language_model.model.layers.15.self_attn.q_proj_action.weight from language_model.model.layers.15.self_attn.q_proj.weight
+Initialized language_model.model.layers.15.self_attn.k_proj_action.weight from language_model.model.layers.15.self_attn.k_proj.weight
+Initialized language_model.model.layers.15.self_attn.v_proj_action.weight from language_model.model.layers.15.self_attn.v_proj.weight
+Initialized language_model.model.layers.15.self_attn.o_proj_action.weight from language_model.model.layers.15.self_attn.o_proj.weight
+Initialized language_model.model.layers.15.mlp_action.gate_proj.weight from language_model.model.layers.15.mlp.gate_proj.weight
+Initialized language_model.model.layers.15.mlp_action.up_proj.weight from language_model.model.layers.15.mlp.up_proj.weight
+Initialized language_model.model.layers.15.mlp_action.down_proj.weight from language_model.model.layers.15.mlp.down_proj.weight
+Initialized language_model.model.layers.15.input_layernorm_action.weight from language_model.model.layers.15.input_layernorm.weight
+Initialized language_model.model.layers.15.post_attention_layernorm_action.weight from language_model.model.layers.15.post_attention_layernorm.weight
+Initialized language_model.model.layers.16.self_attn.q_proj_action.weight from language_model.model.layers.16.self_attn.q_proj.weight
+Initialized language_model.model.layers.16.self_attn.k_proj_action.weight from language_model.model.layers.16.self_attn.k_proj.weight
+Initialized language_model.model.layers.16.self_attn.v_proj_action.weight from language_model.model.layers.16.self_attn.v_proj.weight
+Initialized language_model.model.layers.16.self_attn.o_proj_action.weight from language_model.model.layers.16.self_attn.o_proj.weight
+Initialized language_model.model.layers.16.mlp_action.gate_proj.weight from language_model.model.layers.16.mlp.gate_proj.weight
+Initialized language_model.model.layers.16.mlp_action.up_proj.weight from language_model.model.layers.16.mlp.up_proj.weight
+Initialized language_model.model.layers.16.mlp_action.down_proj.weight from language_model.model.layers.16.mlp.down_proj.weight
+Initialized language_model.model.layers.16.input_layernorm_action.weight from language_model.model.layers.16.input_layernorm.weight
+Initialized language_model.model.layers.16.post_attention_layernorm_action.weight from language_model.model.layers.16.post_attention_layernorm.weight
+Initialized language_model.model.layers.17.self_attn.q_proj_action.weight from language_model.model.layers.17.self_attn.q_proj.weight
+Initialized language_model.model.layers.17.self_attn.k_proj_action.weight from language_model.model.layers.17.self_attn.k_proj.weight
+Initialized language_model.model.layers.17.self_attn.v_proj_action.weight from language_model.model.layers.17.self_attn.v_proj.weight
+Initialized language_model.model.layers.17.self_attn.o_proj_action.weight from language_model.model.layers.17.self_attn.o_proj.weight
+Initialized language_model.model.layers.17.mlp_action.gate_proj.weight from language_model.model.layers.17.mlp.gate_proj.weight
+Initialized language_model.model.layers.17.mlp_action.up_proj.weight from language_model.model.layers.17.mlp.up_proj.weight
+Initialized language_model.model.layers.17.mlp_action.down_proj.weight from language_model.model.layers.17.mlp.down_proj.weight
+Initialized language_model.model.layers.17.input_layernorm_action.weight from language_model.model.layers.17.input_layernorm.weight
+Initialized language_model.model.layers.17.post_attention_layernorm_action.weight from language_model.model.layers.17.post_attention_layernorm.weight
+Initialized language_model.model.layers.18.self_attn.q_proj_action.weight from language_model.model.layers.18.self_attn.q_proj.weight
+Initialized language_model.model.layers.18.self_attn.k_proj_action.weight from language_model.model.layers.18.self_attn.k_proj.weight
+Initialized language_model.model.layers.18.self_attn.v_proj_action.weight from language_model.model.layers.18.self_attn.v_proj.weight
+Initialized language_model.model.layers.18.self_attn.o_proj_action.weight from language_model.model.layers.18.self_attn.o_proj.weight
+Initialized language_model.model.layers.18.mlp_action.gate_proj.weight from language_model.model.layers.18.mlp.gate_proj.weight
+Initialized language_model.model.layers.18.mlp_action.up_proj.weight from language_model.model.layers.18.mlp.up_proj.weight
+Initialized language_model.model.layers.18.mlp_action.down_proj.weight from language_model.model.layers.18.mlp.down_proj.weight
+Initialized language_model.model.layers.18.input_layernorm_action.weight from language_model.model.layers.18.input_layernorm.weight
+Initialized language_model.model.layers.18.post_attention_layernorm_action.weight from language_model.model.layers.18.post_attention_layernorm.weight
+Initialized language_model.model.layers.19.self_attn.q_proj_action.weight from language_model.model.layers.19.self_attn.q_proj.weight
+Initialized language_model.model.layers.19.self_attn.k_proj_action.weight from language_model.model.layers.19.self_attn.k_proj.weight
+Initialized language_model.model.layers.19.self_attn.v_proj_action.weight from language_model.model.layers.19.self_attn.v_proj.weight
+Initialized language_model.model.layers.19.self_attn.o_proj_action.weight from language_model.model.layers.19.self_attn.o_proj.weight
+Initialized language_model.model.layers.19.mlp_action.gate_proj.weight from language_model.model.layers.19.mlp.gate_proj.weight
+Initialized language_model.model.layers.19.mlp_action.up_proj.weight from language_model.model.layers.19.mlp.up_proj.weight
+Initialized language_model.model.layers.19.mlp_action.down_proj.weight from language_model.model.layers.19.mlp.down_proj.weight
+Initialized language_model.model.layers.19.input_layernorm_action.weight from language_model.model.layers.19.input_layernorm.weight
+Initialized language_model.model.layers.19.post_attention_layernorm_action.weight from language_model.model.layers.19.post_attention_layernorm.weight
+Initialized language_model.model.layers.20.self_attn.q_proj_action.weight from language_model.model.layers.20.self_attn.q_proj.weight
+Initialized language_model.model.layers.20.self_attn.k_proj_action.weight from language_model.model.layers.20.self_attn.k_proj.weight
+Initialized language_model.model.layers.20.self_attn.v_proj_action.weight from language_model.model.layers.20.self_attn.v_proj.weight
+Initialized language_model.model.layers.20.self_attn.o_proj_action.weight from language_model.model.layers.20.self_attn.o_proj.weight
+Initialized language_model.model.layers.20.mlp_action.gate_proj.weight from language_model.model.layers.20.mlp.gate_proj.weight
+Initialized language_model.model.layers.20.mlp_action.up_proj.weight from language_model.model.layers.20.mlp.up_proj.weight
+Initialized language_model.model.layers.20.mlp_action.down_proj.weight from language_model.model.layers.20.mlp.down_proj.weight
+Initialized language_model.model.layers.20.input_layernorm_action.weight from language_model.model.layers.20.input_layernorm.weight
+Initialized language_model.model.layers.20.post_attention_layernorm_action.weight from language_model.model.layers.20.post_attention_layernorm.weight
+Initialized language_model.model.layers.21.self_attn.q_proj_action.weight from language_model.model.layers.21.self_attn.q_proj.weight
+Initialized language_model.model.layers.21.self_attn.k_proj_action.weight from language_model.model.layers.21.self_attn.k_proj.weight
+Initialized language_model.model.layers.21.self_attn.v_proj_action.weight from language_model.model.layers.21.self_attn.v_proj.weight
+Initialized language_model.model.layers.21.self_attn.o_proj_action.weight from language_model.model.layers.21.self_attn.o_proj.weight
+Initialized language_model.model.layers.21.mlp_action.gate_proj.weight from language_model.model.layers.21.mlp.gate_proj.weight
+Initialized language_model.model.layers.21.mlp_action.up_proj.weight from language_model.model.layers.21.mlp.up_proj.weight
+Initialized language_model.model.layers.21.mlp_action.down_proj.weight from language_model.model.layers.21.mlp.down_proj.weight
+Initialized language_model.model.layers.21.input_layernorm_action.weight from language_model.model.layers.21.input_layernorm.weight
+Initialized language_model.model.layers.21.post_attention_layernorm_action.weight from language_model.model.layers.21.post_attention_layernorm.weight
+Initialized language_model.model.layers.22.self_attn.q_proj_action.weight from language_model.model.layers.22.self_attn.q_proj.weight
+Initialized language_model.model.layers.22.self_attn.k_proj_action.weight from language_model.model.layers.22.self_attn.k_proj.weight
+Initialized language_model.model.layers.22.self_attn.v_proj_action.weight from language_model.model.layers.22.self_attn.v_proj.weight
+Initialized language_model.model.layers.22.self_attn.o_proj_action.weight from language_model.model.layers.22.self_attn.o_proj.weight
+Initialized language_model.model.layers.22.mlp_action.gate_proj.weight from language_model.model.layers.22.mlp.gate_proj.weight
+Initialized language_model.model.layers.22.mlp_action.up_proj.weight from language_model.model.layers.22.mlp.up_proj.weight
+Initialized language_model.model.layers.22.mlp_action.down_proj.weight from language_model.model.layers.22.mlp.down_proj.weight
+Initialized language_model.model.layers.22.input_layernorm_action.weight from language_model.model.layers.22.input_layernorm.weight
+Initialized language_model.model.layers.22.post_attention_layernorm_action.weight from language_model.model.layers.22.post_attention_layernorm.weight
+Initialized language_model.model.layers.23.self_attn.q_proj_action.weight from language_model.model.layers.23.self_attn.q_proj.weight
+Initialized language_model.model.layers.23.self_attn.k_proj_action.weight from language_model.model.layers.23.self_attn.k_proj.weight
+Initialized language_model.model.layers.23.self_attn.v_proj_action.weight from language_model.model.layers.23.self_attn.v_proj.weight
+Initialized language_model.model.layers.23.self_attn.o_proj_action.weight from language_model.model.layers.23.self_attn.o_proj.weight
+Initialized language_model.model.layers.23.mlp_action.gate_proj.weight from language_model.model.layers.23.mlp.gate_proj.weight
+Initialized language_model.model.layers.23.mlp_action.up_proj.weight from language_model.model.layers.23.mlp.up_proj.weight
+Initialized language_model.model.layers.23.mlp_action.down_proj.weight from language_model.model.layers.23.mlp.down_proj.weight
+Initialized language_model.model.layers.23.input_layernorm_action.weight from language_model.model.layers.23.input_layernorm.weight
+Initialized language_model.model.layers.23.post_attention_layernorm_action.weight from language_model.model.layers.23.post_attention_layernorm.weight
+Initialized language_model.model.norm_action.weight from language_model.model.norm.weight
+Initialized x_embedder.mlp.fc1.weight from x_embedder.mlp.fc1.weight
+Initialized x_embedder.mlp.fc1.bias from x_embedder.mlp.fc1.bias
+Initialized x_embedder.mlp.fc2.weight from x_embedder.mlp.fc2.weight
+Initialized x_embedder.mlp.fc2.bias from x_embedder.mlp.fc2.bias
+Initialized t_embedder.mlp.0.weight from t_embedder.mlp.0.weight
+Initialized t_embedder.mlp.0.bias from t_embedder.mlp.0.bias
+Initialized t_embedder.mlp.2.weight from t_embedder.mlp.2.weight
+Initialized t_embedder.mlp.2.bias from t_embedder.mlp.2.bias
+Initialized final_layer.mlp.fc1.weight from final_layer.mlp.fc1.weight
+Initialized final_layer.mlp.fc1.bias from final_layer.mlp.fc1.bias
+Initialized final_layer.mlp.fc2.weight from final_layer.mlp.fc2.weight
+Initialized final_layer.mlp.fc2.bias from final_layer.mlp.fc2.bias
+
+==== Parameter Freeze Status ====
+
+vision_model.vision_tower.pos_embed                           FROZEN
+vision_model.vision_tower.patch_embed.proj.weight             FROZEN
+vision_model.vision_tower.patch_embed.proj.bias               FROZEN
+vision_model.vision_tower.blocks.0.norm1.weight               FROZEN
+vision_model.vision_tower.blocks.0.norm1.bias                 FROZEN
+vision_model.vision_tower.blocks.0.attn.qkv.weight            FROZEN
+vision_model.vision_tower.blocks.0.attn.qkv.bias              FROZEN
+vision_model.vision_tower.blocks.0.attn.proj.weight           FROZEN
+vision_model.vision_tower.blocks.0.attn.proj.bias             FROZEN
+vision_model.vision_tower.blocks.0.norm2.weight               FROZEN
+vision_model.vision_tower.blocks.0.norm2.bias                 FROZEN
+vision_model.vision_tower.blocks.0.mlp.fc1.weight             FROZEN
+vision_model.vision_tower.blocks.0.mlp.fc1.bias               FROZEN
+vision_model.vision_tower.blocks.0.mlp.fc2.weight             FROZEN
+vision_model.vision_tower.blocks.0.mlp.fc2.bias               FROZEN
+vision_model.vision_tower.blocks.1.norm1.weight               FROZEN
+vision_model.vision_tower.blocks.1.norm1.bias                 FROZEN
+vision_model.vision_tower.blocks.1.attn.qkv.weight            FROZEN
+vision_model.vision_tower.blocks.1.attn.qkv.bias              FROZEN
+vision_model.vision_tower.blocks.1.attn.proj.weight           FROZEN
+vision_model.vision_tower.blocks.1.attn.proj.bias             FROZEN
+vision_model.vision_tower.blocks.1.norm2.weight               FROZEN
+vision_model.vision_tower.blocks.1.norm2.bias                 FROZEN
+vision_model.vision_tower.blocks.1.mlp.fc1.weight             FROZEN
+vision_model.vision_tower.blocks.1.mlp.fc1.bias               FROZEN
+vision_model.vision_tower.blocks.1.mlp.fc2.weight             FROZEN
+vision_model.vision_tower.blocks.1.mlp.fc2.bias               FROZEN
+vision_model.vision_tower.blocks.2.norm1.weight               FROZEN
+vision_model.vision_tower.blocks.2.norm1.bias                 FROZEN
+vision_model.vision_tower.blocks.2.attn.qkv.weight            FROZEN
+vision_model.vision_tower.blocks.2.attn.qkv.bias              FROZEN
+vision_model.vision_tower.blocks.2.attn.proj.weight           FROZEN
+vision_model.vision_tower.blocks.2.attn.proj.bias             FROZEN
+vision_model.vision_tower.blocks.2.norm2.weight               FROZEN
+vision_model.vision_tower.blocks.2.norm2.bias                 FROZEN
+vision_model.vision_tower.blocks.2.mlp.fc1.weight             FROZEN
+vision_model.vision_tower.blocks.2.mlp.fc1.bias               FROZEN
+vision_model.vision_tower.blocks.2.mlp.fc2.weight             FROZEN
+vision_model.vision_tower.blocks.2.mlp.fc2.bias               FROZEN
+vision_model.vision_tower.blocks.3.norm1.weight               FROZEN
+vision_model.vision_tower.blocks.3.norm1.bias                 FROZEN
+vision_model.vision_tower.blocks.3.attn.qkv.weight            FROZEN
+vision_model.vision_tower.blocks.3.attn.qkv.bias              FROZEN
+vision_model.vision_tower.blocks.3.attn.proj.weight           FROZEN
+vision_model.vision_tower.blocks.3.attn.proj.bias             FROZEN
+vision_model.vision_tower.blocks.3.norm2.weight               FROZEN
+vision_model.vision_tower.blocks.3.norm2.bias                 FROZEN
+vision_model.vision_tower.blocks.3.mlp.fc1.weight             FROZEN
+vision_model.vision_tower.blocks.3.mlp.fc1.bias               FROZEN
+vision_model.vision_tower.blocks.3.mlp.fc2.weight             FROZEN
+vision_model.vision_tower.blocks.3.mlp.fc2.bias               FROZEN
+vision_model.vision_tower.blocks.4.norm1.weight               FROZEN
+vision_model.vision_tower.blocks.4.norm1.bias                 FROZEN
+vision_model.vision_tower.blocks.4.attn.qkv.weight            FROZEN
+vision_model.vision_tower.blocks.4.attn.qkv.bias              FROZEN
+vision_model.vision_tower.blocks.4.attn.proj.weight           FROZEN
+vision_model.vision_tower.blocks.4.attn.proj.bias             FROZEN
+vision_model.vision_tower.blocks.4.norm2.weight               FROZEN
+vision_model.vision_tower.blocks.4.norm2.bias                 FROZEN
+vision_model.vision_tower.blocks.4.mlp.fc1.weight             FROZEN
+vision_model.vision_tower.blocks.4.mlp.fc1.bias               FROZEN
+vision_model.vision_tower.blocks.4.mlp.fc2.weight             FROZEN
+vision_model.vision_tower.blocks.4.mlp.fc2.bias               FROZEN
+vision_model.vision_tower.blocks.5.norm1.weight               FROZEN
+vision_model.vision_tower.blocks.5.norm1.bias                 FROZEN
+vision_model.vision_tower.blocks.5.attn.qkv.weight            FROZEN
+vision_model.vision_tower.blocks.5.attn.qkv.bias              FROZEN
+vision_model.vision_tower.blocks.5.attn.proj.weight           FROZEN
+vision_model.vision_tower.blocks.5.attn.proj.bias             FROZEN
+vision_model.vision_tower.blocks.5.norm2.weight               FROZEN
+vision_model.vision_tower.blocks.5.norm2.bias                 FROZEN
+vision_model.vision_tower.blocks.5.mlp.fc1.weight             FROZEN
+vision_model.vision_tower.blocks.5.mlp.fc1.bias               FROZEN
+vision_model.vision_tower.blocks.5.mlp.fc2.weight             FROZEN
+vision_model.vision_tower.blocks.5.mlp.fc2.bias               FROZEN
+vision_model.vision_tower.blocks.6.norm1.weight               FROZEN
+vision_model.vision_tower.blocks.6.norm1.bias                 FROZEN
+vision_model.vision_tower.blocks.6.attn.qkv.weight            FROZEN
+vision_model.vision_tower.blocks.6.attn.qkv.bias              FROZEN
+vision_model.vision_tower.blocks.6.attn.proj.weight           FROZEN
+vision_model.vision_tower.blocks.6.attn.proj.bias             FROZEN
+vision_model.vision_tower.blocks.6.norm2.weight               FROZEN
+vision_model.vision_tower.blocks.6.norm2.bias                 FROZEN
+vision_model.vision_tower.blocks.6.mlp.fc1.weight             FROZEN
+vision_model.vision_tower.blocks.6.mlp.fc1.bias               FROZEN
+vision_model.vision_tower.blocks.6.mlp.fc2.weight             FROZEN
+vision_model.vision_tower.blocks.6.mlp.fc2.bias               FROZEN
+vision_model.vision_tower.blocks.7.norm1.weight               FROZEN
+vision_model.vision_tower.blocks.7.norm1.bias                 FROZEN
+vision_model.vision_tower.blocks.7.attn.qkv.weight            FROZEN
+vision_model.vision_tower.blocks.7.attn.qkv.bias              FROZEN
+vision_model.vision_tower.blocks.7.attn.proj.weight           FROZEN
+vision_model.vision_tower.blocks.7.attn.proj.bias             FROZEN
+vision_model.vision_tower.blocks.7.norm2.weight               FROZEN
+vision_model.vision_tower.blocks.7.norm2.bias                 FROZEN
+vision_model.vision_tower.blocks.7.mlp.fc1.weight             FROZEN
+vision_model.vision_tower.blocks.7.mlp.fc1.bias               FROZEN
+vision_model.vision_tower.blocks.7.mlp.fc2.weight             FROZEN
+vision_model.vision_tower.blocks.7.mlp.fc2.bias               FROZEN
+vision_model.vision_tower.blocks.8.norm1.weight               FROZEN
+vision_model.vision_tower.blocks.8.norm1.bias                 FROZEN
+vision_model.vision_tower.blocks.8.attn.qkv.weight            FROZEN
+vision_model.vision_tower.blocks.8.attn.qkv.bias              FROZEN
+vision_model.vision_tower.blocks.8.attn.proj.weight           FROZEN
+vision_model.vision_tower.blocks.8.attn.proj.bias             FROZEN
+vision_model.vision_tower.blocks.8.norm2.weight               FROZEN
+vision_model.vision_tower.blocks.8.norm2.bias                 FROZEN
+vision_model.vision_tower.blocks.8.mlp.fc1.weight             FROZEN
+vision_model.vision_tower.blocks.8.mlp.fc1.bias               FROZEN
+vision_model.vision_tower.blocks.8.mlp.fc2.weight             FROZEN
+vision_model.vision_tower.blocks.8.mlp.fc2.bias               FROZEN
+vision_model.vision_tower.blocks.9.norm1.weight               FROZEN
+vision_model.vision_tower.blocks.9.norm1.bias                 FROZEN
+vision_model.vision_tower.blocks.9.attn.qkv.weight            FROZEN
+vision_model.vision_tower.blocks.9.attn.qkv.bias              FROZEN
+vision_model.vision_tower.blocks.9.attn.proj.weight           FROZEN
+vision_model.vision_tower.blocks.9.attn.proj.bias             FROZEN
+vision_model.vision_tower.blocks.9.norm2.weight               FROZEN
+vision_model.vision_tower.blocks.9.norm2.bias                 FROZEN
+vision_model.vision_tower.blocks.9.mlp.fc1.weight             FROZEN
+vision_model.vision_tower.blocks.9.mlp.fc1.bias               FROZEN
+vision_model.vision_tower.blocks.9.mlp.fc2.weight             FROZEN
+vision_model.vision_tower.blocks.9.mlp.fc2.bias               FROZEN
+vision_model.vision_tower.blocks.10.norm1.weight              FROZEN
+vision_model.vision_tower.blocks.10.norm1.bias                FROZEN
+vision_model.vision_tower.blocks.10.attn.qkv.weight           FROZEN
+vision_model.vision_tower.blocks.10.attn.qkv.bias             FROZEN
+vision_model.vision_tower.blocks.10.attn.proj.weight          FROZEN
+vision_model.vision_tower.blocks.10.attn.proj.bias            FROZEN
+vision_model.vision_tower.blocks.10.norm2.weight              FROZEN
+vision_model.vision_tower.blocks.10.norm2.bias                FROZEN
+vision_model.vision_tower.blocks.10.mlp.fc1.weight            FROZEN
+vision_model.vision_tower.blocks.10.mlp.fc1.bias              FROZEN
+vision_model.vision_tower.blocks.10.mlp.fc2.weight            FROZEN
+vision_model.vision_tower.blocks.10.mlp.fc2.bias              FROZEN
+vision_model.vision_tower.blocks.11.norm1.weight              FROZEN
+vision_model.vision_tower.blocks.11.norm1.bias                FROZEN
+vision_model.vision_tower.blocks.11.attn.qkv.weight           FROZEN
+vision_model.vision_tower.blocks.11.attn.qkv.bias             FROZEN
+vision_model.vision_tower.blocks.11.attn.proj.weight          FROZEN
+vision_model.vision_tower.blocks.11.attn.proj.bias            FROZEN
+vision_model.vision_tower.blocks.11.norm2.weight              FROZEN
+vision_model.vision_tower.blocks.11.norm2.bias                FROZEN
+vision_model.vision_tower.blocks.11.mlp.fc1.weight            FROZEN
+vision_model.vision_tower.blocks.11.mlp.fc1.bias              FROZEN
+vision_model.vision_tower.blocks.11.mlp.fc2.weight            FROZEN
+vision_model.vision_tower.blocks.11.mlp.fc2.bias              FROZEN
+vision_model.vision_tower.blocks.12.norm1.weight              FROZEN
+vision_model.vision_tower.blocks.12.norm1.bias                FROZEN
+vision_model.vision_tower.blocks.12.attn.qkv.weight           FROZEN
+vision_model.vision_tower.blocks.12.attn.qkv.bias             FROZEN
+vision_model.vision_tower.blocks.12.attn.proj.weight          FROZEN
+vision_model.vision_tower.blocks.12.attn.proj.bias            FROZEN
+vision_model.vision_tower.blocks.12.norm2.weight              FROZEN
+vision_model.vision_tower.blocks.12.norm2.bias                FROZEN
+vision_model.vision_tower.blocks.12.mlp.fc1.weight            FROZEN
+vision_model.vision_tower.blocks.12.mlp.fc1.bias              FROZEN
+vision_model.vision_tower.blocks.12.mlp.fc2.weight            FROZEN
+vision_model.vision_tower.blocks.12.mlp.fc2.bias              FROZEN
+vision_model.vision_tower.blocks.13.norm1.weight              FROZEN
+vision_model.vision_tower.blocks.13.norm1.bias                FROZEN
+vision_model.vision_tower.blocks.13.attn.qkv.weight           FROZEN
+vision_model.vision_tower.blocks.13.attn.qkv.bias             FROZEN
+vision_model.vision_tower.blocks.13.attn.proj.weight          FROZEN
+vision_model.vision_tower.blocks.13.attn.proj.bias            FROZEN
+vision_model.vision_tower.blocks.13.norm2.weight              FROZEN
+vision_model.vision_tower.blocks.13.norm2.bias                FROZEN
+vision_model.vision_tower.blocks.13.mlp.fc1.weight            FROZEN
+vision_model.vision_tower.blocks.13.mlp.fc1.bias              FROZEN
+vision_model.vision_tower.blocks.13.mlp.fc2.weight            FROZEN
+vision_model.vision_tower.blocks.13.mlp.fc2.bias              FROZEN
+vision_model.vision_tower.blocks.14.norm1.weight              FROZEN
+vision_model.vision_tower.blocks.14.norm1.bias                FROZEN
+vision_model.vision_tower.blocks.14.attn.qkv.weight           FROZEN
+vision_model.vision_tower.blocks.14.attn.qkv.bias             FROZEN
+vision_model.vision_tower.blocks.14.attn.proj.weight          FROZEN
+vision_model.vision_tower.blocks.14.attn.proj.bias            FROZEN
+vision_model.vision_tower.blocks.14.norm2.weight              FROZEN
+vision_model.vision_tower.blocks.14.norm2.bias                FROZEN
+vision_model.vision_tower.blocks.14.mlp.fc1.weight            FROZEN
+vision_model.vision_tower.blocks.14.mlp.fc1.bias              FROZEN
+vision_model.vision_tower.blocks.14.mlp.fc2.weight            FROZEN
+vision_model.vision_tower.blocks.14.mlp.fc2.bias              FROZEN
+vision_model.vision_tower.blocks.15.norm1.weight              FROZEN
+vision_model.vision_tower.blocks.15.norm1.bias                FROZEN
+vision_model.vision_tower.blocks.15.attn.qkv.weight           FROZEN
+vision_model.vision_tower.blocks.15.attn.qkv.bias             FROZEN
+vision_model.vision_tower.blocks.15.attn.proj.weight          FROZEN
+vision_model.vision_tower.blocks.15.attn.proj.bias            FROZEN
+vision_model.vision_tower.blocks.15.norm2.weight              FROZEN
+vision_model.vision_tower.blocks.15.norm2.bias                FROZEN
+vision_model.vision_tower.blocks.15.mlp.fc1.weight            FROZEN
+vision_model.vision_tower.blocks.15.mlp.fc1.bias              FROZEN
+vision_model.vision_tower.blocks.15.mlp.fc2.weight            FROZEN
+vision_model.vision_tower.blocks.15.mlp.fc2.bias              FROZEN
+vision_model.vision_tower.blocks.16.norm1.weight              FROZEN
+vision_model.vision_tower.blocks.16.norm1.bias                FROZEN
+vision_model.vision_tower.blocks.16.attn.qkv.weight           FROZEN
+vision_model.vision_tower.blocks.16.attn.qkv.bias             FROZEN
+vision_model.vision_tower.blocks.16.attn.proj.weight          FROZEN
+vision_model.vision_tower.blocks.16.attn.proj.bias            FROZEN
+vision_model.vision_tower.blocks.16.norm2.weight              FROZEN
+vision_model.vision_tower.blocks.16.norm2.bias                FROZEN
+vision_model.vision_tower.blocks.16.mlp.fc1.weight            FROZEN
+vision_model.vision_tower.blocks.16.mlp.fc1.bias              FROZEN
+vision_model.vision_tower.blocks.16.mlp.fc2.weight            FROZEN
+vision_model.vision_tower.blocks.16.mlp.fc2.bias              FROZEN
+vision_model.vision_tower.blocks.17.norm1.weight              FROZEN
+vision_model.vision_tower.blocks.17.norm1.bias                FROZEN
+vision_model.vision_tower.blocks.17.attn.qkv.weight           FROZEN
+vision_model.vision_tower.blocks.17.attn.qkv.bias             FROZEN
+vision_model.vision_tower.blocks.17.attn.proj.weight          FROZEN
+vision_model.vision_tower.blocks.17.attn.proj.bias            FROZEN
+vision_model.vision_tower.blocks.17.norm2.weight              FROZEN
+vision_model.vision_tower.blocks.17.norm2.bias                FROZEN
+vision_model.vision_tower.blocks.17.mlp.fc1.weight            FROZEN
+vision_model.vision_tower.blocks.17.mlp.fc1.bias              FROZEN
+vision_model.vision_tower.blocks.17.mlp.fc2.weight            FROZEN
+vision_model.vision_tower.blocks.17.mlp.fc2.bias              FROZEN
+vision_model.vision_tower.blocks.18.norm1.weight              FROZEN
+vision_model.vision_tower.blocks.18.norm1.bias                FROZEN
+vision_model.vision_tower.blocks.18.attn.qkv.weight           FROZEN
+vision_model.vision_tower.blocks.18.attn.qkv.bias             FROZEN
+vision_model.vision_tower.blocks.18.attn.proj.weight          FROZEN
+vision_model.vision_tower.blocks.18.attn.proj.bias            FROZEN
+vision_model.vision_tower.blocks.18.norm2.weight              FROZEN
+vision_model.vision_tower.blocks.18.norm2.bias                FROZEN
+vision_model.vision_tower.blocks.18.mlp.fc1.weight            FROZEN
+vision_model.vision_tower.blocks.18.mlp.fc1.bias              FROZEN
+vision_model.vision_tower.blocks.18.mlp.fc2.weight            FROZEN
+vision_model.vision_tower.blocks.18.mlp.fc2.bias              FROZEN
+vision_model.vision_tower.blocks.19.norm1.weight              FROZEN
+vision_model.vision_tower.blocks.19.norm1.bias                FROZEN
+vision_model.vision_tower.blocks.19.attn.qkv.weight           FROZEN
+vision_model.vision_tower.blocks.19.attn.qkv.bias             FROZEN
+vision_model.vision_tower.blocks.19.attn.proj.weight          FROZEN
+vision_model.vision_tower.blocks.19.attn.proj.bias            FROZEN
+vision_model.vision_tower.blocks.19.norm2.weight              FROZEN
+vision_model.vision_tower.blocks.19.norm2.bias                FROZEN
+vision_model.vision_tower.blocks.19.mlp.fc1.weight            FROZEN
+vision_model.vision_tower.blocks.19.mlp.fc1.bias              FROZEN
+vision_model.vision_tower.blocks.19.mlp.fc2.weight            FROZEN
+vision_model.vision_tower.blocks.19.mlp.fc2.bias              FROZEN
+vision_model.vision_tower.blocks.20.norm1.weight              FROZEN
+vision_model.vision_tower.blocks.20.norm1.bias                FROZEN
+vision_model.vision_tower.blocks.20.attn.qkv.weight           FROZEN
+vision_model.vision_tower.blocks.20.attn.qkv.bias             FROZEN
+vision_model.vision_tower.blocks.20.attn.proj.weight          FROZEN
+vision_model.vision_tower.blocks.20.attn.proj.bias            FROZEN
+vision_model.vision_tower.blocks.20.norm2.weight              FROZEN
+vision_model.vision_tower.blocks.20.norm2.bias                FROZEN
+vision_model.vision_tower.blocks.20.mlp.fc1.weight            FROZEN
+vision_model.vision_tower.blocks.20.mlp.fc1.bias              FROZEN
+vision_model.vision_tower.blocks.20.mlp.fc2.weight            FROZEN
+vision_model.vision_tower.blocks.20.mlp.fc2.bias              FROZEN
+vision_model.vision_tower.blocks.21.norm1.weight              FROZEN
+vision_model.vision_tower.blocks.21.norm1.bias                FROZEN
+vision_model.vision_tower.blocks.21.attn.qkv.weight           FROZEN
+vision_model.vision_tower.blocks.21.attn.qkv.bias             FROZEN
+vision_model.vision_tower.blocks.21.attn.proj.weight          FROZEN
+vision_model.vision_tower.blocks.21.attn.proj.bias            FROZEN
+vision_model.vision_tower.blocks.21.norm2.weight              FROZEN
+vision_model.vision_tower.blocks.21.norm2.bias                FROZEN
+vision_model.vision_tower.blocks.21.mlp.fc1.weight            FROZEN
+vision_model.vision_tower.blocks.21.mlp.fc1.bias              FROZEN
+vision_model.vision_tower.blocks.21.mlp.fc2.weight            FROZEN
+vision_model.vision_tower.blocks.21.mlp.fc2.bias              FROZEN
+vision_model.vision_tower.blocks.22.norm1.weight              FROZEN
+vision_model.vision_tower.blocks.22.norm1.bias                FROZEN
+vision_model.vision_tower.blocks.22.attn.qkv.weight           FROZEN
+vision_model.vision_tower.blocks.22.attn.qkv.bias             FROZEN
+vision_model.vision_tower.blocks.22.attn.proj.weight          FROZEN
+vision_model.vision_tower.blocks.22.attn.proj.bias            FROZEN
+vision_model.vision_tower.blocks.22.norm2.weight              FROZEN
+vision_model.vision_tower.blocks.22.norm2.bias                FROZEN
+vision_model.vision_tower.blocks.22.mlp.fc1.weight            FROZEN
+vision_model.vision_tower.blocks.22.mlp.fc1.bias              FROZEN
+vision_model.vision_tower.blocks.22.mlp.fc2.weight            FROZEN
+vision_model.vision_tower.blocks.22.mlp.fc2.bias              FROZEN
+vision_model.vision_tower.blocks.23.norm1.weight              FROZEN
+vision_model.vision_tower.blocks.23.norm1.bias                FROZEN
+vision_model.vision_tower.blocks.23.attn.qkv.weight           FROZEN
+vision_model.vision_tower.blocks.23.attn.qkv.bias             FROZEN
+vision_model.vision_tower.blocks.23.attn.proj.weight          FROZEN
+vision_model.vision_tower.blocks.23.attn.proj.bias            FROZEN
+vision_model.vision_tower.blocks.23.norm2.weight              FROZEN
+vision_model.vision_tower.blocks.23.norm2.bias                FROZEN
+vision_model.vision_tower.blocks.23.mlp.fc1.weight            FROZEN
+vision_model.vision_tower.blocks.23.mlp.fc1.bias              FROZEN
+vision_model.vision_tower.blocks.23.mlp.fc2.weight            FROZEN
+vision_model.vision_tower.blocks.23.mlp.fc2.bias              FROZEN
+vision_model.vision_tower.norm.weight                         FROZEN
+vision_model.vision_tower.norm.bias                           FROZEN
+vision_model.vision_tower.attn_pool.latent                    FROZEN
+vision_model.vision_tower.attn_pool.q.weight                  FROZEN
+vision_model.vision_tower.attn_pool.q.bias                    FROZEN
+vision_model.vision_tower.attn_pool.kv.weight                 FROZEN
+vision_model.vision_tower.attn_pool.kv.bias                   FROZEN
+vision_model.vision_tower.attn_pool.proj.weight               FROZEN
+vision_model.vision_tower.attn_pool.proj.bias                 FROZEN
+vision_model.vision_tower.attn_pool.norm.weight               FROZEN
+vision_model.vision_tower.attn_pool.norm.bias                 FROZEN
+vision_model.vision_tower.attn_pool.mlp.fc1.weight            FROZEN
+vision_model.vision_tower.attn_pool.mlp.fc1.bias              FROZEN
+vision_model.vision_tower.attn_pool.mlp.fc2.weight            FROZEN
+vision_model.vision_tower.attn_pool.mlp.fc2.bias              FROZEN
+aligner.layers.0.weight                                       FROZEN
+aligner.layers.0.bias                                         FROZEN
+aligner.layers.2.weight                                       FROZEN
+aligner.layers.2.bias                                         FROZEN
+gen_vision_model.encoder.conv_in.weight                       FROZEN
+gen_vision_model.encoder.conv_in.bias                         FROZEN
+gen_vision_model.encoder.conv_blocks.0.res.0.norm1.weight     FROZEN
+gen_vision_model.encoder.conv_blocks.0.res.0.norm1.bias       FROZEN
+gen_vision_model.encoder.conv_blocks.0.res.0.conv1.weight     FROZEN
+gen_vision_model.encoder.conv_blocks.0.res.0.conv1.bias       FROZEN
+gen_vision_model.encoder.conv_blocks.0.res.0.norm2.weight     FROZEN
+gen_vision_model.encoder.conv_blocks.0.res.0.norm2.bias       FROZEN
+gen_vision_model.encoder.conv_blocks.0.res.0.conv2.weight     FROZEN
+gen_vision_model.encoder.conv_blocks.0.res.0.conv2.bias       FROZEN
+gen_vision_model.encoder.conv_blocks.0.res.1.norm1.weight     FROZEN
+gen_vision_model.encoder.conv_blocks.0.res.1.norm1.bias       FROZEN
+gen_vision_model.encoder.conv_blocks.0.res.1.conv1.weight     FROZEN
+gen_vision_model.encoder.conv_blocks.0.res.1.conv1.bias       FROZEN
+gen_vision_model.encoder.conv_blocks.0.res.1.norm2.weight     FROZEN
+gen_vision_model.encoder.conv_blocks.0.res.1.norm2.bias       FROZEN
+gen_vision_model.encoder.conv_blocks.0.res.1.conv2.weight     FROZEN
+gen_vision_model.encoder.conv_blocks.0.res.1.conv2.bias       FROZEN
+gen_vision_model.encoder.conv_blocks.0.downsample.conv.weight  FROZEN
+gen_vision_model.encoder.conv_blocks.0.downsample.conv.bias   FROZEN
+gen_vision_model.encoder.conv_blocks.1.res.0.norm1.weight     FROZEN
+gen_vision_model.encoder.conv_blocks.1.res.0.norm1.bias       FROZEN
+gen_vision_model.encoder.conv_blocks.1.res.0.conv1.weight     FROZEN
+gen_vision_model.encoder.conv_blocks.1.res.0.conv1.bias       FROZEN
+gen_vision_model.encoder.conv_blocks.1.res.0.norm2.weight     FROZEN
+gen_vision_model.encoder.conv_blocks.1.res.0.norm2.bias       FROZEN
+gen_vision_model.encoder.conv_blocks.1.res.0.conv2.weight     FROZEN
+gen_vision_model.encoder.conv_blocks.1.res.0.conv2.bias       FROZEN
+gen_vision_model.encoder.conv_blocks.1.res.1.norm1.weight     FROZEN
+gen_vision_model.encoder.conv_blocks.1.res.1.norm1.bias       FROZEN
+gen_vision_model.encoder.conv_blocks.1.res.1.conv1.weight     FROZEN
+gen_vision_model.encoder.conv_blocks.1.res.1.conv1.bias       FROZEN
+gen_vision_model.encoder.conv_blocks.1.res.1.norm2.weight     FROZEN
+gen_vision_model.encoder.conv_blocks.1.res.1.norm2.bias       FROZEN
+gen_vision_model.encoder.conv_blocks.1.res.1.conv2.weight     FROZEN
+gen_vision_model.encoder.conv_blocks.1.res.1.conv2.bias       FROZEN
+gen_vision_model.encoder.conv_blocks.1.downsample.conv.weight  FROZEN
+gen_vision_model.encoder.conv_blocks.1.downsample.conv.bias   FROZEN
+gen_vision_model.encoder.conv_blocks.2.res.0.norm1.weight     FROZEN
+gen_vision_model.encoder.conv_blocks.2.res.0.norm1.bias       FROZEN
+gen_vision_model.encoder.conv_blocks.2.res.0.conv1.weight     FROZEN
+gen_vision_model.encoder.conv_blocks.2.res.0.conv1.bias       FROZEN
+gen_vision_model.encoder.conv_blocks.2.res.0.norm2.weight     FROZEN
+gen_vision_model.encoder.conv_blocks.2.res.0.norm2.bias       FROZEN
+gen_vision_model.encoder.conv_blocks.2.res.0.conv2.weight     FROZEN
+gen_vision_model.encoder.conv_blocks.2.res.0.conv2.bias       FROZEN
+gen_vision_model.encoder.conv_blocks.2.res.0.nin_shortcut.weight  FROZEN
+gen_vision_model.encoder.conv_blocks.2.res.0.nin_shortcut.bias  FROZEN
+gen_vision_model.encoder.conv_blocks.2.res.1.norm1.weight     FROZEN
+gen_vision_model.encoder.conv_blocks.2.res.1.norm1.bias       FROZEN
+gen_vision_model.encoder.conv_blocks.2.res.1.conv1.weight     FROZEN
+gen_vision_model.encoder.conv_blocks.2.res.1.conv1.bias       FROZEN
+gen_vision_model.encoder.conv_blocks.2.res.1.norm2.weight     FROZEN
+gen_vision_model.encoder.conv_blocks.2.res.1.norm2.bias       FROZEN
+gen_vision_model.encoder.conv_blocks.2.res.1.conv2.weight     FROZEN
+gen_vision_model.encoder.conv_blocks.2.res.1.conv2.bias       FROZEN
+gen_vision_model.encoder.conv_blocks.2.downsample.conv.weight  FROZEN
+gen_vision_model.encoder.conv_blocks.2.downsample.conv.bias   FROZEN
+gen_vision_model.encoder.conv_blocks.3.res.0.norm1.weight     FROZEN
+gen_vision_model.encoder.conv_blocks.3.res.0.norm1.bias       FROZEN
+gen_vision_model.encoder.conv_blocks.3.res.0.conv1.weight     FROZEN
+gen_vision_model.encoder.conv_blocks.3.res.0.conv1.bias       FROZEN
+gen_vision_model.encoder.conv_blocks.3.res.0.norm2.weight     FROZEN
+gen_vision_model.encoder.conv_blocks.3.res.0.norm2.bias       FROZEN
+gen_vision_model.encoder.conv_blocks.3.res.0.conv2.weight     FROZEN
+gen_vision_model.encoder.conv_blocks.3.res.0.conv2.bias       FROZEN
+gen_vision_model.encoder.conv_blocks.3.res.1.norm1.weight     FROZEN
+gen_vision_model.encoder.conv_blocks.3.res.1.norm1.bias       FROZEN
+gen_vision_model.encoder.conv_blocks.3.res.1.conv1.weight     FROZEN
+gen_vision_model.encoder.conv_blocks.3.res.1.conv1.bias       FROZEN
+gen_vision_model.encoder.conv_blocks.3.res.1.norm2.weight     FROZEN
+gen_vision_model.encoder.conv_blocks.3.res.1.norm2.bias       FROZEN
+gen_vision_model.encoder.conv_blocks.3.res.1.conv2.weight     FROZEN
+gen_vision_model.encoder.conv_blocks.3.res.1.conv2.bias       FROZEN
+gen_vision_model.encoder.conv_blocks.3.downsample.conv.weight  FROZEN
+gen_vision_model.encoder.conv_blocks.3.downsample.conv.bias   FROZEN
+gen_vision_model.encoder.conv_blocks.4.res.0.norm1.weight     FROZEN
+gen_vision_model.encoder.conv_blocks.4.res.0.norm1.bias       FROZEN
+gen_vision_model.encoder.conv_blocks.4.res.0.conv1.weight     FROZEN
+gen_vision_model.encoder.conv_blocks.4.res.0.conv1.bias       FROZEN
+gen_vision_model.encoder.conv_blocks.4.res.0.norm2.weight     FROZEN
+gen_vision_model.encoder.conv_blocks.4.res.0.norm2.bias       FROZEN
+gen_vision_model.encoder.conv_blocks.4.res.0.conv2.weight     FROZEN
+gen_vision_model.encoder.conv_blocks.4.res.0.conv2.bias       FROZEN
+gen_vision_model.encoder.conv_blocks.4.res.0.nin_shortcut.weight  FROZEN
+gen_vision_model.encoder.conv_blocks.4.res.0.nin_shortcut.bias  FROZEN
+gen_vision_model.encoder.conv_blocks.4.res.1.norm1.weight     FROZEN
+gen_vision_model.encoder.conv_blocks.4.res.1.norm1.bias       FROZEN
+gen_vision_model.encoder.conv_blocks.4.res.1.conv1.weight     FROZEN
+gen_vision_model.encoder.conv_blocks.4.res.1.conv1.bias       FROZEN
+gen_vision_model.encoder.conv_blocks.4.res.1.norm2.weight     FROZEN
+gen_vision_model.encoder.conv_blocks.4.res.1.norm2.bias       FROZEN
+gen_vision_model.encoder.conv_blocks.4.res.1.conv2.weight     FROZEN
+gen_vision_model.encoder.conv_blocks.4.res.1.conv2.bias       FROZEN
+gen_vision_model.encoder.conv_blocks.4.attn.0.norm.weight     FROZEN
+gen_vision_model.encoder.conv_blocks.4.attn.0.norm.bias       FROZEN
+gen_vision_model.encoder.conv_blocks.4.attn.0.q.weight        FROZEN
+gen_vision_model.encoder.conv_blocks.4.attn.0.q.bias          FROZEN
+gen_vision_model.encoder.conv_blocks.4.attn.0.k.weight        FROZEN
+gen_vision_model.encoder.conv_blocks.4.attn.0.k.bias          FROZEN
+gen_vision_model.encoder.conv_blocks.4.attn.0.v.weight        FROZEN
+gen_vision_model.encoder.conv_blocks.4.attn.0.v.bias          FROZEN
+gen_vision_model.encoder.conv_blocks.4.attn.0.proj_out.weight  FROZEN
+gen_vision_model.encoder.conv_blocks.4.attn.0.proj_out.bias   FROZEN
+gen_vision_model.encoder.conv_blocks.4.attn.1.norm.weight     FROZEN
+gen_vision_model.encoder.conv_blocks.4.attn.1.norm.bias       FROZEN
+gen_vision_model.encoder.conv_blocks.4.attn.1.q.weight        FROZEN
+gen_vision_model.encoder.conv_blocks.4.attn.1.q.bias          FROZEN
+gen_vision_model.encoder.conv_blocks.4.attn.1.k.weight        FROZEN
+gen_vision_model.encoder.conv_blocks.4.attn.1.k.bias          FROZEN
+gen_vision_model.encoder.conv_blocks.4.attn.1.v.weight        FROZEN
+gen_vision_model.encoder.conv_blocks.4.attn.1.v.bias          FROZEN
+gen_vision_model.encoder.conv_blocks.4.attn.1.proj_out.weight  FROZEN
+gen_vision_model.encoder.conv_blocks.4.attn.1.proj_out.bias   FROZEN
+gen_vision_model.encoder.mid.0.norm1.weight                   FROZEN
+gen_vision_model.encoder.mid.0.norm1.bias                     FROZEN
+gen_vision_model.encoder.mid.0.conv1.weight                   FROZEN
+gen_vision_model.encoder.mid.0.conv1.bias                     FROZEN
+gen_vision_model.encoder.mid.0.norm2.weight                   FROZEN
+gen_vision_model.encoder.mid.0.norm2.bias                     FROZEN
+gen_vision_model.encoder.mid.0.conv2.weight                   FROZEN
+gen_vision_model.encoder.mid.0.conv2.bias                     FROZEN
+gen_vision_model.encoder.mid.1.norm.weight                    FROZEN
+gen_vision_model.encoder.mid.1.norm.bias                      FROZEN
+gen_vision_model.encoder.mid.1.q.weight                       FROZEN
+gen_vision_model.encoder.mid.1.q.bias                         FROZEN
+gen_vision_model.encoder.mid.1.k.weight                       FROZEN
+gen_vision_model.encoder.mid.1.k.bias                         FROZEN
+gen_vision_model.encoder.mid.1.v.weight                       FROZEN
+gen_vision_model.encoder.mid.1.v.bias                         FROZEN
+gen_vision_model.encoder.mid.1.proj_out.weight                FROZEN
+gen_vision_model.encoder.mid.1.proj_out.bias                  FROZEN
+gen_vision_model.encoder.mid.2.norm1.weight                   FROZEN
+gen_vision_model.encoder.mid.2.norm1.bias                     FROZEN
+gen_vision_model.encoder.mid.2.conv1.weight                   FROZEN
+gen_vision_model.encoder.mid.2.conv1.bias                     FROZEN
+gen_vision_model.encoder.mid.2.norm2.weight                   FROZEN
+gen_vision_model.encoder.mid.2.norm2.bias                     FROZEN
+gen_vision_model.encoder.mid.2.conv2.weight                   FROZEN
+gen_vision_model.encoder.mid.2.conv2.bias                     FROZEN
+gen_vision_model.encoder.norm_out.weight                      FROZEN
+gen_vision_model.encoder.norm_out.bias                        FROZEN
+gen_vision_model.encoder.conv_out.weight                      FROZEN
+gen_vision_model.encoder.conv_out.bias                        FROZEN
+gen_vision_model.decoder.conv_in.weight                       FROZEN
+gen_vision_model.decoder.conv_in.bias                         FROZEN
+gen_vision_model.decoder.mid.0.norm1.weight                   FROZEN
+gen_vision_model.decoder.mid.0.norm1.bias                     FROZEN
+gen_vision_model.decoder.mid.0.conv1.weight                   FROZEN
+gen_vision_model.decoder.mid.0.conv1.bias                     FROZEN
+gen_vision_model.decoder.mid.0.norm2.weight                   FROZEN
+gen_vision_model.decoder.mid.0.norm2.bias                     FROZEN
+gen_vision_model.decoder.mid.0.conv2.weight                   FROZEN
+gen_vision_model.decoder.mid.0.conv2.bias                     FROZEN
+gen_vision_model.decoder.mid.1.norm.weight                    FROZEN
+gen_vision_model.decoder.mid.1.norm.bias                      FROZEN
+gen_vision_model.decoder.mid.1.q.weight                       FROZEN
+gen_vision_model.decoder.mid.1.q.bias                         FROZEN
+gen_vision_model.decoder.mid.1.k.weight                       FROZEN
+gen_vision_model.decoder.mid.1.k.bias                         FROZEN
+gen_vision_model.decoder.mid.1.v.weight                       FROZEN
+gen_vision_model.decoder.mid.1.v.bias                         FROZEN
+gen_vision_model.decoder.mid.1.proj_out.weight                FROZEN
+gen_vision_model.decoder.mid.1.proj_out.bias                  FROZEN
+gen_vision_model.decoder.mid.2.norm1.weight                   FROZEN
+gen_vision_model.decoder.mid.2.norm1.bias                     FROZEN
+gen_vision_model.decoder.mid.2.conv1.weight                   FROZEN
+gen_vision_model.decoder.mid.2.conv1.bias                     FROZEN
+gen_vision_model.decoder.mid.2.norm2.weight                   FROZEN
+gen_vision_model.decoder.mid.2.norm2.bias                     FROZEN
+gen_vision_model.decoder.mid.2.conv2.weight                   FROZEN
+gen_vision_model.decoder.mid.2.conv2.bias                     FROZEN
+gen_vision_model.decoder.conv_blocks.0.res.0.norm1.weight     FROZEN
+gen_vision_model.decoder.conv_blocks.0.res.0.norm1.bias       FROZEN
+gen_vision_model.decoder.conv_blocks.0.res.0.conv1.weight     FROZEN
+gen_vision_model.decoder.conv_blocks.0.res.0.conv1.bias       FROZEN
+gen_vision_model.decoder.conv_blocks.0.res.0.norm2.weight     FROZEN
+gen_vision_model.decoder.conv_blocks.0.res.0.norm2.bias       FROZEN
+gen_vision_model.decoder.conv_blocks.0.res.0.conv2.weight     FROZEN
+gen_vision_model.decoder.conv_blocks.0.res.0.conv2.bias       FROZEN
+gen_vision_model.decoder.conv_blocks.0.res.1.norm1.weight     FROZEN
+gen_vision_model.decoder.conv_blocks.0.res.1.norm1.bias       FROZEN
+gen_vision_model.decoder.conv_blocks.0.res.1.conv1.weight     FROZEN
+gen_vision_model.decoder.conv_blocks.0.res.1.conv1.bias       FROZEN
+gen_vision_model.decoder.conv_blocks.0.res.1.norm2.weight     FROZEN
+gen_vision_model.decoder.conv_blocks.0.res.1.norm2.bias       FROZEN
+gen_vision_model.decoder.conv_blocks.0.res.1.conv2.weight     FROZEN
+gen_vision_model.decoder.conv_blocks.0.res.1.conv2.bias       FROZEN
+gen_vision_model.decoder.conv_blocks.0.res.2.norm1.weight     FROZEN
+gen_vision_model.decoder.conv_blocks.0.res.2.norm1.bias       FROZEN
+gen_vision_model.decoder.conv_blocks.0.res.2.conv1.weight     FROZEN
+gen_vision_model.decoder.conv_blocks.0.res.2.conv1.bias       FROZEN
+gen_vision_model.decoder.conv_blocks.0.res.2.norm2.weight     FROZEN
+gen_vision_model.decoder.conv_blocks.0.res.2.norm2.bias       FROZEN
+gen_vision_model.decoder.conv_blocks.0.res.2.conv2.weight     FROZEN
+gen_vision_model.decoder.conv_blocks.0.res.2.conv2.bias       FROZEN
+gen_vision_model.decoder.conv_blocks.0.attn.0.norm.weight     FROZEN
+gen_vision_model.decoder.conv_blocks.0.attn.0.norm.bias       FROZEN
+gen_vision_model.decoder.conv_blocks.0.attn.0.q.weight        FROZEN
+gen_vision_model.decoder.conv_blocks.0.attn.0.q.bias          FROZEN
+gen_vision_model.decoder.conv_blocks.0.attn.0.k.weight        FROZEN
+gen_vision_model.decoder.conv_blocks.0.attn.0.k.bias          FROZEN
+gen_vision_model.decoder.conv_blocks.0.attn.0.v.weight        FROZEN
+gen_vision_model.decoder.conv_blocks.0.attn.0.v.bias          FROZEN
+gen_vision_model.decoder.conv_blocks.0.attn.0.proj_out.weight  FROZEN
+gen_vision_model.decoder.conv_blocks.0.attn.0.proj_out.bias   FROZEN
+gen_vision_model.decoder.conv_blocks.0.attn.1.norm.weight     FROZEN
+gen_vision_model.decoder.conv_blocks.0.attn.1.norm.bias       FROZEN
+gen_vision_model.decoder.conv_blocks.0.attn.1.q.weight        FROZEN
+gen_vision_model.decoder.conv_blocks.0.attn.1.q.bias          FROZEN
+gen_vision_model.decoder.conv_blocks.0.attn.1.k.weight        FROZEN
+gen_vision_model.decoder.conv_blocks.0.attn.1.k.bias          FROZEN
+gen_vision_model.decoder.conv_blocks.0.attn.1.v.weight        FROZEN
+gen_vision_model.decoder.conv_blocks.0.attn.1.v.bias          FROZEN
+gen_vision_model.decoder.conv_blocks.0.attn.1.proj_out.weight  FROZEN
+gen_vision_model.decoder.conv_blocks.0.attn.1.proj_out.bias   FROZEN
+gen_vision_model.decoder.conv_blocks.0.attn.2.norm.weight     FROZEN
+gen_vision_model.decoder.conv_blocks.0.attn.2.norm.bias       FROZEN
+gen_vision_model.decoder.conv_blocks.0.attn.2.q.weight        FROZEN
+gen_vision_model.decoder.conv_blocks.0.attn.2.q.bias          FROZEN
+gen_vision_model.decoder.conv_blocks.0.attn.2.k.weight        FROZEN
+gen_vision_model.decoder.conv_blocks.0.attn.2.k.bias          FROZEN
+gen_vision_model.decoder.conv_blocks.0.attn.2.v.weight        FROZEN
+gen_vision_model.decoder.conv_blocks.0.attn.2.v.bias          FROZEN
+gen_vision_model.decoder.conv_blocks.0.attn.2.proj_out.weight  FROZEN
+gen_vision_model.decoder.conv_blocks.0.attn.2.proj_out.bias   FROZEN
+gen_vision_model.decoder.conv_blocks.0.upsample.conv.weight   FROZEN
+gen_vision_model.decoder.conv_blocks.0.upsample.conv.bias     FROZEN
+gen_vision_model.decoder.conv_blocks.1.res.0.norm1.weight     FROZEN
+gen_vision_model.decoder.conv_blocks.1.res.0.norm1.bias       FROZEN
+gen_vision_model.decoder.conv_blocks.1.res.0.conv1.weight     FROZEN
+gen_vision_model.decoder.conv_blocks.1.res.0.conv1.bias       FROZEN
+gen_vision_model.decoder.conv_blocks.1.res.0.norm2.weight     FROZEN
+gen_vision_model.decoder.conv_blocks.1.res.0.norm2.bias       FROZEN
+gen_vision_model.decoder.conv_blocks.1.res.0.conv2.weight     FROZEN
+gen_vision_model.decoder.conv_blocks.1.res.0.conv2.bias       FROZEN
+gen_vision_model.decoder.conv_blocks.1.res.0.nin_shortcut.weight  FROZEN
+gen_vision_model.decoder.conv_blocks.1.res.0.nin_shortcut.bias  FROZEN
+gen_vision_model.decoder.conv_blocks.1.res.1.norm1.weight     FROZEN
+gen_vision_model.decoder.conv_blocks.1.res.1.norm1.bias       FROZEN
+gen_vision_model.decoder.conv_blocks.1.res.1.conv1.weight     FROZEN
+gen_vision_model.decoder.conv_blocks.1.res.1.conv1.bias       FROZEN
+gen_vision_model.decoder.conv_blocks.1.res.1.norm2.weight     FROZEN
+gen_vision_model.decoder.conv_blocks.1.res.1.norm2.bias       FROZEN
+gen_vision_model.decoder.conv_blocks.1.res.1.conv2.weight     FROZEN
+gen_vision_model.decoder.conv_blocks.1.res.1.conv2.bias       FROZEN
+gen_vision_model.decoder.conv_blocks.1.res.2.norm1.weight     FROZEN
+gen_vision_model.decoder.conv_blocks.1.res.2.norm1.bias       FROZEN
+gen_vision_model.decoder.conv_blocks.1.res.2.conv1.weight     FROZEN
+gen_vision_model.decoder.conv_blocks.1.res.2.conv1.bias       FROZEN
+gen_vision_model.decoder.conv_blocks.1.res.2.norm2.weight     FROZEN
+gen_vision_model.decoder.conv_blocks.1.res.2.norm2.bias       FROZEN
+gen_vision_model.decoder.conv_blocks.1.res.2.conv2.weight     FROZEN
+gen_vision_model.decoder.conv_blocks.1.res.2.conv2.bias       FROZEN
+gen_vision_model.decoder.conv_blocks.1.upsample.conv.weight   FROZEN
+gen_vision_model.decoder.conv_blocks.1.upsample.conv.bias     FROZEN
+gen_vision_model.decoder.conv_blocks.2.res.0.norm1.weight     FROZEN
+gen_vision_model.decoder.conv_blocks.2.res.0.norm1.bias       FROZEN
+gen_vision_model.decoder.conv_blocks.2.res.0.conv1.weight     FROZEN
+gen_vision_model.decoder.conv_blocks.2.res.0.conv1.bias       FROZEN
+gen_vision_model.decoder.conv_blocks.2.res.0.norm2.weight     FROZEN
+gen_vision_model.decoder.conv_blocks.2.res.0.norm2.bias       FROZEN
+gen_vision_model.decoder.conv_blocks.2.res.0.conv2.weight     FROZEN
+gen_vision_model.decoder.conv_blocks.2.res.0.conv2.bias       FROZEN
+gen_vision_model.decoder.conv_blocks.2.res.1.norm1.weight     FROZEN
+gen_vision_model.decoder.conv_blocks.2.res.1.norm1.bias       FROZEN
+gen_vision_model.decoder.conv_blocks.2.res.1.conv1.weight     FROZEN
+gen_vision_model.decoder.conv_blocks.2.res.1.conv1.bias       FROZEN
+gen_vision_model.decoder.conv_blocks.2.res.1.norm2.weight     FROZEN
+gen_vision_model.decoder.conv_blocks.2.res.1.norm2.bias       FROZEN
+gen_vision_model.decoder.conv_blocks.2.res.1.conv2.weight     FROZEN
+gen_vision_model.decoder.conv_blocks.2.res.1.conv2.bias       FROZEN
+gen_vision_model.decoder.conv_blocks.2.res.2.norm1.weight     FROZEN
+gen_vision_model.decoder.conv_blocks.2.res.2.norm1.bias       FROZEN
+gen_vision_model.decoder.conv_blocks.2.res.2.conv1.weight     FROZEN
+gen_vision_model.decoder.conv_blocks.2.res.2.conv1.bias       FROZEN
+gen_vision_model.decoder.conv_blocks.2.res.2.norm2.weight     FROZEN
+gen_vision_model.decoder.conv_blocks.2.res.2.norm2.bias       FROZEN
+gen_vision_model.decoder.conv_blocks.2.res.2.conv2.weight     FROZEN
+gen_vision_model.decoder.conv_blocks.2.res.2.conv2.bias       FROZEN
+gen_vision_model.decoder.conv_blocks.2.upsample.conv.weight   FROZEN
+gen_vision_model.decoder.conv_blocks.2.upsample.conv.bias     FROZEN
+gen_vision_model.decoder.conv_blocks.3.res.0.norm1.weight     FROZEN
+gen_vision_model.decoder.conv_blocks.3.res.0.norm1.bias       FROZEN
+gen_vision_model.decoder.conv_blocks.3.res.0.conv1.weight     FROZEN
+gen_vision_model.decoder.conv_blocks.3.res.0.conv1.bias       FROZEN
+gen_vision_model.decoder.conv_blocks.3.res.0.norm2.weight     FROZEN
+gen_vision_model.decoder.conv_blocks.3.res.0.norm2.bias       FROZEN
+gen_vision_model.decoder.conv_blocks.3.res.0.conv2.weight     FROZEN
+gen_vision_model.decoder.conv_blocks.3.res.0.conv2.bias       FROZEN
+gen_vision_model.decoder.conv_blocks.3.res.0.nin_shortcut.weight  FROZEN
+gen_vision_model.decoder.conv_blocks.3.res.0.nin_shortcut.bias  FROZEN
+gen_vision_model.decoder.conv_blocks.3.res.1.norm1.weight     FROZEN
+gen_vision_model.decoder.conv_blocks.3.res.1.norm1.bias       FROZEN
+gen_vision_model.decoder.conv_blocks.3.res.1.conv1.weight     FROZEN
+gen_vision_model.decoder.conv_blocks.3.res.1.conv1.bias       FROZEN
+gen_vision_model.decoder.conv_blocks.3.res.1.norm2.weight     FROZEN
+gen_vision_model.decoder.conv_blocks.3.res.1.norm2.bias       FROZEN
+gen_vision_model.decoder.conv_blocks.3.res.1.conv2.weight     FROZEN
+gen_vision_model.decoder.conv_blocks.3.res.1.conv2.bias       FROZEN
+gen_vision_model.decoder.conv_blocks.3.res.2.norm1.weight     FROZEN
+gen_vision_model.decoder.conv_blocks.3.res.2.norm1.bias       FROZEN
+gen_vision_model.decoder.conv_blocks.3.res.2.conv1.weight     FROZEN
+gen_vision_model.decoder.conv_blocks.3.res.2.conv1.bias       FROZEN
+gen_vision_model.decoder.conv_blocks.3.res.2.norm2.weight     FROZEN
+gen_vision_model.decoder.conv_blocks.3.res.2.norm2.bias       FROZEN
+gen_vision_model.decoder.conv_blocks.3.res.2.conv2.weight     FROZEN
+gen_vision_model.decoder.conv_blocks.3.res.2.conv2.bias       FROZEN
+gen_vision_model.decoder.conv_blocks.3.upsample.conv.weight   FROZEN
+gen_vision_model.decoder.conv_blocks.3.upsample.conv.bias     FROZEN
+gen_vision_model.decoder.conv_blocks.4.res.0.norm1.weight     FROZEN
+gen_vision_model.decoder.conv_blocks.4.res.0.norm1.bias       FROZEN
+gen_vision_model.decoder.conv_blocks.4.res.0.conv1.weight     FROZEN
+gen_vision_model.decoder.conv_blocks.4.res.0.conv1.bias       FROZEN
+gen_vision_model.decoder.conv_blocks.4.res.0.norm2.weight     FROZEN
+gen_vision_model.decoder.conv_blocks.4.res.0.norm2.bias       FROZEN
+gen_vision_model.decoder.conv_blocks.4.res.0.conv2.weight     FROZEN
+gen_vision_model.decoder.conv_blocks.4.res.0.conv2.bias       FROZEN
+gen_vision_model.decoder.conv_blocks.4.res.1.norm1.weight     FROZEN
+gen_vision_model.decoder.conv_blocks.4.res.1.norm1.bias       FROZEN
+gen_vision_model.decoder.conv_blocks.4.res.1.conv1.weight     FROZEN
+gen_vision_model.decoder.conv_blocks.4.res.1.conv1.bias       FROZEN
+gen_vision_model.decoder.conv_blocks.4.res.1.norm2.weight     FROZEN
+gen_vision_model.decoder.conv_blocks.4.res.1.norm2.bias       FROZEN
+gen_vision_model.decoder.conv_blocks.4.res.1.conv2.weight     FROZEN
+gen_vision_model.decoder.conv_blocks.4.res.1.conv2.bias       FROZEN
+gen_vision_model.decoder.conv_blocks.4.res.2.norm1.weight     FROZEN
+gen_vision_model.decoder.conv_blocks.4.res.2.norm1.bias       FROZEN
+gen_vision_model.decoder.conv_blocks.4.res.2.conv1.weight     FROZEN
+gen_vision_model.decoder.conv_blocks.4.res.2.conv1.bias       FROZEN
+gen_vision_model.decoder.conv_blocks.4.res.2.norm2.weight     FROZEN
+gen_vision_model.decoder.conv_blocks.4.res.2.norm2.bias       FROZEN
+gen_vision_model.decoder.conv_blocks.4.res.2.conv2.weight     FROZEN
+gen_vision_model.decoder.conv_blocks.4.res.2.conv2.bias       FROZEN
+gen_vision_model.decoder.norm_out.weight                      FROZEN
+gen_vision_model.decoder.norm_out.bias                        FROZEN
+gen_vision_model.decoder.conv_out.weight                      FROZEN
+gen_vision_model.decoder.conv_out.bias                        FROZEN
+gen_vision_model.quantize.codebook_used                       FROZEN
+gen_vision_model.quantize.embedding.weight                    FROZEN
+gen_vision_model.quant_conv.weight                            FROZEN
+gen_vision_model.quant_conv.bias                              FROZEN
+gen_vision_model.post_quant_conv.weight                       FROZEN
+gen_vision_model.post_quant_conv.bias                         FROZEN
+gen_aligner.layers.0.weight                                   TRAINABLE
+gen_aligner.layers.0.bias                                     TRAINABLE
+gen_aligner.layers.2.weight                                   TRAINABLE
+gen_aligner.layers.2.bias                                     TRAINABLE
+gen_head.output_mlp_projector.weight                          TRAINABLE
+gen_head.output_mlp_projector.bias                            TRAINABLE
+gen_head.vision_head.weight                                   TRAINABLE
+gen_head.vision_head.bias                                     TRAINABLE
+gen_embed.weight                                              TRAINABLE
+language_model.model.embed_tokens.weight                      TRAINABLE
+language_model.model.layers.0.self_attn.q_proj.weight         TRAINABLE
+language_model.model.layers.0.self_attn.k_proj.weight         TRAINABLE
+language_model.model.layers.0.self_attn.v_proj.weight         TRAINABLE
+language_model.model.layers.0.self_attn.o_proj.weight         TRAINABLE
+language_model.model.layers.0.self_attn.q_proj_action.weight  TRAINABLE
+language_model.model.layers.0.self_attn.k_proj_action.weight  TRAINABLE
+language_model.model.layers.0.self_attn.v_proj_action.weight  TRAINABLE
+language_model.model.layers.0.self_attn.o_proj_action.weight  TRAINABLE
+language_model.model.layers.0.mlp.gate_proj.weight            TRAINABLE
+language_model.model.layers.0.mlp.up_proj.weight              TRAINABLE
+language_model.model.layers.0.mlp.down_proj.weight            TRAINABLE
+language_model.model.layers.0.input_layernorm.weight          TRAINABLE
+language_model.model.layers.0.post_attention_layernorm.weight  TRAINABLE
+language_model.model.layers.0.mlp_action.gate_proj.weight     TRAINABLE
+language_model.model.layers.0.mlp_action.up_proj.weight       TRAINABLE
+language_model.model.layers.0.mlp_action.down_proj.weight     TRAINABLE
+language_model.model.layers.0.input_layernorm_action.weight   TRAINABLE
+language_model.model.layers.0.post_attention_layernorm_action.weight  TRAINABLE
+language_model.model.layers.1.self_attn.q_proj.weight         TRAINABLE
+language_model.model.layers.1.self_attn.k_proj.weight         TRAINABLE
+language_model.model.layers.1.self_attn.v_proj.weight         TRAINABLE
+language_model.model.layers.1.self_attn.o_proj.weight         TRAINABLE
+language_model.model.layers.1.self_attn.q_proj_action.weight  TRAINABLE
+language_model.model.layers.1.self_attn.k_proj_action.weight  TRAINABLE
+language_model.model.layers.1.self_attn.v_proj_action.weight  TRAINABLE
+language_model.model.layers.1.self_attn.o_proj_action.weight  TRAINABLE
+language_model.model.layers.1.mlp.gate_proj.weight            TRAINABLE
+language_model.model.layers.1.mlp.up_proj.weight              TRAINABLE
+language_model.model.layers.1.mlp.down_proj.weight            TRAINABLE
+language_model.model.layers.1.input_layernorm.weight          TRAINABLE
+language_model.model.layers.1.post_attention_layernorm.weight  TRAINABLE
+language_model.model.layers.1.mlp_action.gate_proj.weight     TRAINABLE
+language_model.model.layers.1.mlp_action.up_proj.weight       TRAINABLE
+language_model.model.layers.1.mlp_action.down_proj.weight     TRAINABLE
+language_model.model.layers.1.input_layernorm_action.weight   TRAINABLE
+language_model.model.layers.1.post_attention_layernorm_action.weight  TRAINABLE
+language_model.model.layers.2.self_attn.q_proj.weight         TRAINABLE
+language_model.model.layers.2.self_attn.k_proj.weight         TRAINABLE
+language_model.model.layers.2.self_attn.v_proj.weight         TRAINABLE
+language_model.model.layers.2.self_attn.o_proj.weight         TRAINABLE
+language_model.model.layers.2.self_attn.q_proj_action.weight  TRAINABLE
+language_model.model.layers.2.self_attn.k_proj_action.weight  TRAINABLE
+language_model.model.layers.2.self_attn.v_proj_action.weight  TRAINABLE
+language_model.model.layers.2.self_attn.o_proj_action.weight  TRAINABLE
+language_model.model.layers.2.mlp.gate_proj.weight            TRAINABLE
+language_model.model.layers.2.mlp.up_proj.weight              TRAINABLE
+language_model.model.layers.2.mlp.down_proj.weight            TRAINABLE
+language_model.model.layers.2.input_layernorm.weight          TRAINABLE
+language_model.model.layers.2.post_attention_layernorm.weight  TRAINABLE
+language_model.model.layers.2.mlp_action.gate_proj.weight     TRAINABLE
+language_model.model.layers.2.mlp_action.up_proj.weight       TRAINABLE
+language_model.model.layers.2.mlp_action.down_proj.weight     TRAINABLE
+language_model.model.layers.2.input_layernorm_action.weight   TRAINABLE
+language_model.model.layers.2.post_attention_layernorm_action.weight  TRAINABLE
+language_model.model.layers.3.self_attn.q_proj.weight         TRAINABLE
+language_model.model.layers.3.self_attn.k_proj.weight         TRAINABLE
+language_model.model.layers.3.self_attn.v_proj.weight         TRAINABLE
+language_model.model.layers.3.self_attn.o_proj.weight         TRAINABLE
+language_model.model.layers.3.self_attn.q_proj_action.weight  TRAINABLE
+language_model.model.layers.3.self_attn.k_proj_action.weight  TRAINABLE
+language_model.model.layers.3.self_attn.v_proj_action.weight  TRAINABLE
+language_model.model.layers.3.self_attn.o_proj_action.weight  TRAINABLE
+language_model.model.layers.3.mlp.gate_proj.weight            TRAINABLE
+language_model.model.layers.3.mlp.up_proj.weight              TRAINABLE
+language_model.model.layers.3.mlp.down_proj.weight            TRAINABLE
+language_model.model.layers.3.input_layernorm.weight          TRAINABLE
+language_model.model.layers.3.post_attention_layernorm.weight  TRAINABLE
+language_model.model.layers.3.mlp_action.gate_proj.weight     TRAINABLE
+language_model.model.layers.3.mlp_action.up_proj.weight       TRAINABLE
+language_model.model.layers.3.mlp_action.down_proj.weight     TRAINABLE
+language_model.model.layers.3.input_layernorm_action.weight   TRAINABLE
+language_model.model.layers.3.post_attention_layernorm_action.weight  TRAINABLE
+language_model.model.layers.4.self_attn.q_proj.weight         TRAINABLE
+language_model.model.layers.4.self_attn.k_proj.weight         TRAINABLE
+language_model.model.layers.4.self_attn.v_proj.weight         TRAINABLE
+language_model.model.layers.4.self_attn.o_proj.weight         TRAINABLE
+language_model.model.layers.4.self_attn.q_proj_action.weight  TRAINABLE
+language_model.model.layers.4.self_attn.k_proj_action.weight  TRAINABLE
+language_model.model.layers.4.self_attn.v_proj_action.weight  TRAINABLE
+language_model.model.layers.4.self_attn.o_proj_action.weight  TRAINABLE
+language_model.model.layers.4.mlp.gate_proj.weight            TRAINABLE
+language_model.model.layers.4.mlp.up_proj.weight              TRAINABLE
+language_model.model.layers.4.mlp.down_proj.weight            TRAINABLE
+language_model.model.layers.4.input_layernorm.weight          TRAINABLE
+language_model.model.layers.4.post_attention_layernorm.weight  TRAINABLE
+language_model.model.layers.4.mlp_action.gate_proj.weight     TRAINABLE
+language_model.model.layers.4.mlp_action.up_proj.weight       TRAINABLE
+language_model.model.layers.4.mlp_action.down_proj.weight     TRAINABLE
+language_model.model.layers.4.input_layernorm_action.weight   TRAINABLE
+language_model.model.layers.4.post_attention_layernorm_action.weight  TRAINABLE
+language_model.model.layers.5.self_attn.q_proj.weight         TRAINABLE
+language_model.model.layers.5.self_attn.k_proj.weight         TRAINABLE
+language_model.model.layers.5.self_attn.v_proj.weight         TRAINABLE
+language_model.model.layers.5.self_attn.o_proj.weight         TRAINABLE
+language_model.model.layers.5.self_attn.q_proj_action.weight  TRAINABLE
+language_model.model.layers.5.self_attn.k_proj_action.weight  TRAINABLE
+language_model.model.layers.5.self_attn.v_proj_action.weight  TRAINABLE
+language_model.model.layers.5.self_attn.o_proj_action.weight  TRAINABLE
+language_model.model.layers.5.mlp.gate_proj.weight            TRAINABLE
+language_model.model.layers.5.mlp.up_proj.weight              TRAINABLE
+language_model.model.layers.5.mlp.down_proj.weight            TRAINABLE
+language_model.model.layers.5.input_layernorm.weight          TRAINABLE
+language_model.model.layers.5.post_attention_layernorm.weight  TRAINABLE
+language_model.model.layers.5.mlp_action.gate_proj.weight     TRAINABLE
+language_model.model.layers.5.mlp_action.up_proj.weight       TRAINABLE
+language_model.model.layers.5.mlp_action.down_proj.weight     TRAINABLE
+language_model.model.layers.5.input_layernorm_action.weight   TRAINABLE
+language_model.model.layers.5.post_attention_layernorm_action.weight  TRAINABLE
+language_model.model.layers.6.self_attn.q_proj.weight         TRAINABLE
+language_model.model.layers.6.self_attn.k_proj.weight         TRAINABLE
+language_model.model.layers.6.self_attn.v_proj.weight         TRAINABLE
+language_model.model.layers.6.self_attn.o_proj.weight         TRAINABLE
+language_model.model.layers.6.self_attn.q_proj_action.weight  TRAINABLE
+language_model.model.layers.6.self_attn.k_proj_action.weight  TRAINABLE
+language_model.model.layers.6.self_attn.v_proj_action.weight  TRAINABLE
+language_model.model.layers.6.self_attn.o_proj_action.weight  TRAINABLE
+language_model.model.layers.6.mlp.gate_proj.weight            TRAINABLE
+language_model.model.layers.6.mlp.up_proj.weight              TRAINABLE
+language_model.model.layers.6.mlp.down_proj.weight            TRAINABLE
+language_model.model.layers.6.input_layernorm.weight          TRAINABLE
+language_model.model.layers.6.post_attention_layernorm.weight  TRAINABLE
+language_model.model.layers.6.mlp_action.gate_proj.weight     TRAINABLE
+language_model.model.layers.6.mlp_action.up_proj.weight       TRAINABLE
+language_model.model.layers.6.mlp_action.down_proj.weight     TRAINABLE
+language_model.model.layers.6.input_layernorm_action.weight   TRAINABLE
+language_model.model.layers.6.post_attention_layernorm_action.weight  TRAINABLE
+language_model.model.layers.7.self_attn.q_proj.weight         TRAINABLE
+language_model.model.layers.7.self_attn.k_proj.weight         TRAINABLE
+language_model.model.layers.7.self_attn.v_proj.weight         TRAINABLE
+language_model.model.layers.7.self_attn.o_proj.weight         TRAINABLE
+language_model.model.layers.7.self_attn.q_proj_action.weight  TRAINABLE
+language_model.model.layers.7.self_attn.k_proj_action.weight  TRAINABLE
+language_model.model.layers.7.self_attn.v_proj_action.weight  TRAINABLE
+language_model.model.layers.7.self_attn.o_proj_action.weight  TRAINABLE
+language_model.model.layers.7.mlp.gate_proj.weight            TRAINABLE
+language_model.model.layers.7.mlp.up_proj.weight              TRAINABLE
+language_model.model.layers.7.mlp.down_proj.weight            TRAINABLE
+language_model.model.layers.7.input_layernorm.weight          TRAINABLE
+language_model.model.layers.7.post_attention_layernorm.weight  TRAINABLE
+language_model.model.layers.7.mlp_action.gate_proj.weight     TRAINABLE
+language_model.model.layers.7.mlp_action.up_proj.weight       TRAINABLE
+language_model.model.layers.7.mlp_action.down_proj.weight     TRAINABLE
+language_model.model.layers.7.input_layernorm_action.weight   TRAINABLE
+language_model.model.layers.7.post_attention_layernorm_action.weight  TRAINABLE
+language_model.model.layers.8.self_attn.q_proj.weight         TRAINABLE
+language_model.model.layers.8.self_attn.k_proj.weight         TRAINABLE
+language_model.model.layers.8.self_attn.v_proj.weight         TRAINABLE
+language_model.model.layers.8.self_attn.o_proj.weight         TRAINABLE
+language_model.model.layers.8.self_attn.q_proj_action.weight  TRAINABLE
+language_model.model.layers.8.self_attn.k_proj_action.weight  TRAINABLE
+language_model.model.layers.8.self_attn.v_proj_action.weight  TRAINABLE
+language_model.model.layers.8.self_attn.o_proj_action.weight  TRAINABLE
+language_model.model.layers.8.mlp.gate_proj.weight            TRAINABLE
+language_model.model.layers.8.mlp.up_proj.weight              TRAINABLE
+language_model.model.layers.8.mlp.down_proj.weight            TRAINABLE
+language_model.model.layers.8.input_layernorm.weight          TRAINABLE
+language_model.model.layers.8.post_attention_layernorm.weight  TRAINABLE
+language_model.model.layers.8.mlp_action.gate_proj.weight     TRAINABLE
+language_model.model.layers.8.mlp_action.up_proj.weight       TRAINABLE
+language_model.model.layers.8.mlp_action.down_proj.weight     TRAINABLE
+language_model.model.layers.8.input_layernorm_action.weight   TRAINABLE
+language_model.model.layers.8.post_attention_layernorm_action.weight  TRAINABLE
+language_model.model.layers.9.self_attn.q_proj.weight         TRAINABLE
+language_model.model.layers.9.self_attn.k_proj.weight         TRAINABLE
+language_model.model.layers.9.self_attn.v_proj.weight         TRAINABLE
+language_model.model.layers.9.self_attn.o_proj.weight         TRAINABLE
+language_model.model.layers.9.self_attn.q_proj_action.weight  TRAINABLE
+language_model.model.layers.9.self_attn.k_proj_action.weight  TRAINABLE
+language_model.model.layers.9.self_attn.v_proj_action.weight  TRAINABLE
+language_model.model.layers.9.self_attn.o_proj_action.weight  TRAINABLE
+language_model.model.layers.9.mlp.gate_proj.weight            TRAINABLE
+language_model.model.layers.9.mlp.up_proj.weight              TRAINABLE
+language_model.model.layers.9.mlp.down_proj.weight            TRAINABLE
+language_model.model.layers.9.input_layernorm.weight          TRAINABLE
+language_model.model.layers.9.post_attention_layernorm.weight  TRAINABLE
+language_model.model.layers.9.mlp_action.gate_proj.weight     TRAINABLE
+language_model.model.layers.9.mlp_action.up_proj.weight       TRAINABLE
+language_model.model.layers.9.mlp_action.down_proj.weight     TRAINABLE
+language_model.model.layers.9.input_layernorm_action.weight   TRAINABLE
+language_model.model.layers.9.post_attention_layernorm_action.weight  TRAINABLE
+language_model.model.layers.10.self_attn.q_proj.weight        TRAINABLE
+language_model.model.layers.10.self_attn.k_proj.weight        TRAINABLE
+language_model.model.layers.10.self_attn.v_proj.weight        TRAINABLE
+language_model.model.layers.10.self_attn.o_proj.weight        TRAINABLE
+language_model.model.layers.10.self_attn.q_proj_action.weight  TRAINABLE
+language_model.model.layers.10.self_attn.k_proj_action.weight  TRAINABLE
+language_model.model.layers.10.self_attn.v_proj_action.weight  TRAINABLE
+language_model.model.layers.10.self_attn.o_proj_action.weight  TRAINABLE
+language_model.model.layers.10.mlp.gate_proj.weight           TRAINABLE
+language_model.model.layers.10.mlp.up_proj.weight             TRAINABLE
+language_model.model.layers.10.mlp.down_proj.weight           TRAINABLE
+language_model.model.layers.10.input_layernorm.weight         TRAINABLE
+language_model.model.layers.10.post_attention_layernorm.weight  TRAINABLE
+language_model.model.layers.10.mlp_action.gate_proj.weight    TRAINABLE
+language_model.model.layers.10.mlp_action.up_proj.weight      TRAINABLE
+language_model.model.layers.10.mlp_action.down_proj.weight    TRAINABLE
+language_model.model.layers.10.input_layernorm_action.weight  TRAINABLE
+language_model.model.layers.10.post_attention_layernorm_action.weight  TRAINABLE
+language_model.model.layers.11.self_attn.q_proj.weight        TRAINABLE
+language_model.model.layers.11.self_attn.k_proj.weight        TRAINABLE
+language_model.model.layers.11.self_attn.v_proj.weight        TRAINABLE
+language_model.model.layers.11.self_attn.o_proj.weight        TRAINABLE
+language_model.model.layers.11.self_attn.q_proj_action.weight  TRAINABLE
+language_model.model.layers.11.self_attn.k_proj_action.weight  TRAINABLE
+language_model.model.layers.11.self_attn.v_proj_action.weight  TRAINABLE
+language_model.model.layers.11.self_attn.o_proj_action.weight  TRAINABLE
+language_model.model.layers.11.mlp.gate_proj.weight           TRAINABLE
+language_model.model.layers.11.mlp.up_proj.weight             TRAINABLE
+language_model.model.layers.11.mlp.down_proj.weight           TRAINABLE
+language_model.model.layers.11.input_layernorm.weight         TRAINABLE
+language_model.model.layers.11.post_attention_layernorm.weight  TRAINABLE
+language_model.model.layers.11.mlp_action.gate_proj.weight    TRAINABLE
+language_model.model.layers.11.mlp_action.up_proj.weight      TRAINABLE
+language_model.model.layers.11.mlp_action.down_proj.weight    TRAINABLE
+language_model.model.layers.11.input_layernorm_action.weight  TRAINABLE
+language_model.model.layers.11.post_attention_layernorm_action.weight  TRAINABLE
+language_model.model.layers.12.self_attn.q_proj.weight        TRAINABLE
+language_model.model.layers.12.self_attn.k_proj.weight        TRAINABLE
+language_model.model.layers.12.self_attn.v_proj.weight        TRAINABLE
+language_model.model.layers.12.self_attn.o_proj.weight        TRAINABLE
+language_model.model.layers.12.self_attn.q_proj_action.weight  TRAINABLE
+language_model.model.layers.12.self_attn.k_proj_action.weight  TRAINABLE
+language_model.model.layers.12.self_attn.v_proj_action.weight  TRAINABLE
+language_model.model.layers.12.self_attn.o_proj_action.weight  TRAINABLE
+language_model.model.layers.12.mlp.gate_proj.weight           TRAINABLE
+language_model.model.layers.12.mlp.up_proj.weight             TRAINABLE
+language_model.model.layers.12.mlp.down_proj.weight           TRAINABLE
+language_model.model.layers.12.input_layernorm.weight         TRAINABLE
+language_model.model.layers.12.post_attention_layernorm.weight  TRAINABLE
+language_model.model.layers.12.mlp_action.gate_proj.weight    TRAINABLE
+language_model.model.layers.12.mlp_action.up_proj.weight      TRAINABLE
+language_model.model.layers.12.mlp_action.down_proj.weight    TRAINABLE
+language_model.model.layers.12.input_layernorm_action.weight  TRAINABLE
+language_model.model.layers.12.post_attention_layernorm_action.weight  TRAINABLE
+language_model.model.layers.13.self_attn.q_proj.weight        TRAINABLE
+language_model.model.layers.13.self_attn.k_proj.weight        TRAINABLE
+language_model.model.layers.13.self_attn.v_proj.weight        TRAINABLE
+language_model.model.layers.13.self_attn.o_proj.weight        TRAINABLE
+language_model.model.layers.13.self_attn.q_proj_action.weight  TRAINABLE
+language_model.model.layers.13.self_attn.k_proj_action.weight  TRAINABLE
+language_model.model.layers.13.self_attn.v_proj_action.weight  TRAINABLE
+language_model.model.layers.13.self_attn.o_proj_action.weight  TRAINABLE
+language_model.model.layers.13.mlp.gate_proj.weight           TRAINABLE
+language_model.model.layers.13.mlp.up_proj.weight             TRAINABLE
+language_model.model.layers.13.mlp.down_proj.weight           TRAINABLE
+language_model.model.layers.13.input_layernorm.weight         TRAINABLE
+language_model.model.layers.13.post_attention_layernorm.weight  TRAINABLE
+language_model.model.layers.13.mlp_action.gate_proj.weight    TRAINABLE
+language_model.model.layers.13.mlp_action.up_proj.weight      TRAINABLE
+language_model.model.layers.13.mlp_action.down_proj.weight    TRAINABLE
+language_model.model.layers.13.input_layernorm_action.weight  TRAINABLE
+language_model.model.layers.13.post_attention_layernorm_action.weight  TRAINABLE
+language_model.model.layers.14.self_attn.q_proj.weight        TRAINABLE
+language_model.model.layers.14.self_attn.k_proj.weight        TRAINABLE
+language_model.model.layers.14.self_attn.v_proj.weight        TRAINABLE
+language_model.model.layers.14.self_attn.o_proj.weight        TRAINABLE
+language_model.model.layers.14.self_attn.q_proj_action.weight  TRAINABLE
+language_model.model.layers.14.self_attn.k_proj_action.weight  TRAINABLE
+language_model.model.layers.14.self_attn.v_proj_action.weight  TRAINABLE
+language_model.model.layers.14.self_attn.o_proj_action.weight  TRAINABLE
+language_model.model.layers.14.mlp.gate_proj.weight           TRAINABLE
+language_model.model.layers.14.mlp.up_proj.weight             TRAINABLE
+language_model.model.layers.14.mlp.down_proj.weight           TRAINABLE
+language_model.model.layers.14.input_layernorm.weight         TRAINABLE
+language_model.model.layers.14.post_attention_layernorm.weight  TRAINABLE
+language_model.model.layers.14.mlp_action.gate_proj.weight    TRAINABLE
+language_model.model.layers.14.mlp_action.up_proj.weight      TRAINABLE
+language_model.model.layers.14.mlp_action.down_proj.weight    TRAINABLE
+language_model.model.layers.14.input_layernorm_action.weight  TRAINABLE
+language_model.model.layers.14.post_attention_layernorm_action.weight  TRAINABLE
+language_model.model.layers.15.self_attn.q_proj.weight        TRAINABLE
+language_model.model.layers.15.self_attn.k_proj.weight        TRAINABLE
+language_model.model.layers.15.self_attn.v_proj.weight        TRAINABLE
+language_model.model.layers.15.self_attn.o_proj.weight        TRAINABLE
+language_model.model.layers.15.self_attn.q_proj_action.weight  TRAINABLE
+language_model.model.layers.15.self_attn.k_proj_action.weight  TRAINABLE
+language_model.model.layers.15.self_attn.v_proj_action.weight  TRAINABLE
+language_model.model.layers.15.self_attn.o_proj_action.weight  TRAINABLE
+language_model.model.layers.15.mlp.gate_proj.weight           TRAINABLE
+language_model.model.layers.15.mlp.up_proj.weight             TRAINABLE
+language_model.model.layers.15.mlp.down_proj.weight           TRAINABLE
+language_model.model.layers.15.input_layernorm.weight         TRAINABLE
+language_model.model.layers.15.post_attention_layernorm.weight  TRAINABLE
+language_model.model.layers.15.mlp_action.gate_proj.weight    TRAINABLE
+language_model.model.layers.15.mlp_action.up_proj.weight      TRAINABLE
+language_model.model.layers.15.mlp_action.down_proj.weight    TRAINABLE
+language_model.model.layers.15.input_layernorm_action.weight  TRAINABLE
+language_model.model.layers.15.post_attention_layernorm_action.weight  TRAINABLE
+language_model.model.layers.16.self_attn.q_proj.weight        TRAINABLE
+language_model.model.layers.16.self_attn.k_proj.weight        TRAINABLE
+language_model.model.layers.16.self_attn.v_proj.weight        TRAINABLE
+language_model.model.layers.16.self_attn.o_proj.weight        TRAINABLE
+language_model.model.layers.16.self_attn.q_proj_action.weight  TRAINABLE
+language_model.model.layers.16.self_attn.k_proj_action.weight  TRAINABLE
+language_model.model.layers.16.self_attn.v_proj_action.weight  TRAINABLE
+language_model.model.layers.16.self_attn.o_proj_action.weight  TRAINABLE
+language_model.model.layers.16.mlp.gate_proj.weight           TRAINABLE
+language_model.model.layers.16.mlp.up_proj.weight             TRAINABLE
+language_model.model.layers.16.mlp.down_proj.weight           TRAINABLE
+language_model.model.layers.16.input_layernorm.weight         TRAINABLE
+language_model.model.layers.16.post_attention_layernorm.weight  TRAINABLE
+language_model.model.layers.16.mlp_action.gate_proj.weight    TRAINABLE
+language_model.model.layers.16.mlp_action.up_proj.weight      TRAINABLE
+language_model.model.layers.16.mlp_action.down_proj.weight    TRAINABLE
+language_model.model.layers.16.input_layernorm_action.weight  TRAINABLE
+language_model.model.layers.16.post_attention_layernorm_action.weight  TRAINABLE
+language_model.model.layers.17.self_attn.q_proj.weight        TRAINABLE
+language_model.model.layers.17.self_attn.k_proj.weight        TRAINABLE
+language_model.model.layers.17.self_attn.v_proj.weight        TRAINABLE
+language_model.model.layers.17.self_attn.o_proj.weight        TRAINABLE
+language_model.model.layers.17.self_attn.q_proj_action.weight  TRAINABLE
+language_model.model.layers.17.self_attn.k_proj_action.weight  TRAINABLE
+language_model.model.layers.17.self_attn.v_proj_action.weight  TRAINABLE
+language_model.model.layers.17.self_attn.o_proj_action.weight  TRAINABLE
+language_model.model.layers.17.mlp.gate_proj.weight           TRAINABLE
+language_model.model.layers.17.mlp.up_proj.weight             TRAINABLE
+language_model.model.layers.17.mlp.down_proj.weight           TRAINABLE
+language_model.model.layers.17.input_layernorm.weight         TRAINABLE
+language_model.model.layers.17.post_attention_layernorm.weight  TRAINABLE
+language_model.model.layers.17.mlp_action.gate_proj.weight    TRAINABLE
+language_model.model.layers.17.mlp_action.up_proj.weight      TRAINABLE
+language_model.model.layers.17.mlp_action.down_proj.weight    TRAINABLE
+language_model.model.layers.17.input_layernorm_action.weight  TRAINABLE
+language_model.model.layers.17.post_attention_layernorm_action.weight  TRAINABLE
+language_model.model.layers.18.self_attn.q_proj.weight        TRAINABLE
+language_model.model.layers.18.self_attn.k_proj.weight        TRAINABLE
+language_model.model.layers.18.self_attn.v_proj.weight        TRAINABLE
+language_model.model.layers.18.self_attn.o_proj.weight        TRAINABLE
+language_model.model.layers.18.self_attn.q_proj_action.weight  TRAINABLE
+language_model.model.layers.18.self_attn.k_proj_action.weight  TRAINABLE
+language_model.model.layers.18.self_attn.v_proj_action.weight  TRAINABLE
+language_model.model.layers.18.self_attn.o_proj_action.weight  TRAINABLE
+language_model.model.layers.18.mlp.gate_proj.weight           TRAINABLE
+language_model.model.layers.18.mlp.up_proj.weight             TRAINABLE
+language_model.model.layers.18.mlp.down_proj.weight           TRAINABLE
+language_model.model.layers.18.input_layernorm.weight         TRAINABLE
+language_model.model.layers.18.post_attention_layernorm.weight  TRAINABLE
+language_model.model.layers.18.mlp_action.gate_proj.weight    TRAINABLE
+language_model.model.layers.18.mlp_action.up_proj.weight      TRAINABLE
+language_model.model.layers.18.mlp_action.down_proj.weight    TRAINABLE
+language_model.model.layers.18.input_layernorm_action.weight  TRAINABLE
+language_model.model.layers.18.post_attention_layernorm_action.weight  TRAINABLE
+language_model.model.layers.19.self_attn.q_proj.weight        TRAINABLE
+language_model.model.layers.19.self_attn.k_proj.weight        TRAINABLE
+language_model.model.layers.19.self_attn.v_proj.weight        TRAINABLE
+language_model.model.layers.19.self_attn.o_proj.weight        TRAINABLE
+language_model.model.layers.19.self_attn.q_proj_action.weight  TRAINABLE
+language_model.model.layers.19.self_attn.k_proj_action.weight  TRAINABLE
+language_model.model.layers.19.self_attn.v_proj_action.weight  TRAINABLE
+language_model.model.layers.19.self_attn.o_proj_action.weight  TRAINABLE
+language_model.model.layers.19.mlp.gate_proj.weight           TRAINABLE
+language_model.model.layers.19.mlp.up_proj.weight             TRAINABLE
+language_model.model.layers.19.mlp.down_proj.weight           TRAINABLE
+language_model.model.layers.19.input_layernorm.weight         TRAINABLE
+language_model.model.layers.19.post_attention_layernorm.weight  TRAINABLE
+language_model.model.layers.19.mlp_action.gate_proj.weight    TRAINABLE
+language_model.model.layers.19.mlp_action.up_proj.weight      TRAINABLE
+language_model.model.layers.19.mlp_action.down_proj.weight    TRAINABLE
+language_model.model.layers.19.input_layernorm_action.weight  TRAINABLE
+language_model.model.layers.19.post_attention_layernorm_action.weight  TRAINABLE
+language_model.model.layers.20.self_attn.q_proj.weight        TRAINABLE
+language_model.model.layers.20.self_attn.k_proj.weight        TRAINABLE
+language_model.model.layers.20.self_attn.v_proj.weight        TRAINABLE
+language_model.model.layers.20.self_attn.o_proj.weight        TRAINABLE
+language_model.model.layers.20.self_attn.q_proj_action.weight  TRAINABLE
+language_model.model.layers.20.self_attn.k_proj_action.weight  TRAINABLE
+language_model.model.layers.20.self_attn.v_proj_action.weight  TRAINABLE
+language_model.model.layers.20.self_attn.o_proj_action.weight  TRAINABLE
+language_model.model.layers.20.mlp.gate_proj.weight           TRAINABLE
+language_model.model.layers.20.mlp.up_proj.weight             TRAINABLE
+language_model.model.layers.20.mlp.down_proj.weight           TRAINABLE
+language_model.model.layers.20.input_layernorm.weight         TRAINABLE
+language_model.model.layers.20.post_attention_layernorm.weight  TRAINABLE
+language_model.model.layers.20.mlp_action.gate_proj.weight    TRAINABLE
+language_model.model.layers.20.mlp_action.up_proj.weight      TRAINABLE
+language_model.model.layers.20.mlp_action.down_proj.weight    TRAINABLE
+language_model.model.layers.20.input_layernorm_action.weight  TRAINABLE
+language_model.model.layers.20.post_attention_layernorm_action.weight  TRAINABLE
+language_model.model.layers.21.self_attn.q_proj.weight        TRAINABLE
+language_model.model.layers.21.self_attn.k_proj.weight        TRAINABLE
+language_model.model.layers.21.self_attn.v_proj.weight        TRAINABLE
+language_model.model.layers.21.self_attn.o_proj.weight        TRAINABLE
+language_model.model.layers.21.self_attn.q_proj_action.weight  TRAINABLE
+language_model.model.layers.21.self_attn.k_proj_action.weight  TRAINABLE
+language_model.model.layers.21.self_attn.v_proj_action.weight  TRAINABLE
+language_model.model.layers.21.self_attn.o_proj_action.weight  TRAINABLE
+language_model.model.layers.21.mlp.gate_proj.weight           TRAINABLE
+language_model.model.layers.21.mlp.up_proj.weight             TRAINABLE
+language_model.model.layers.21.mlp.down_proj.weight           TRAINABLE
+language_model.model.layers.21.input_layernorm.weight         TRAINABLE
+language_model.model.layers.21.post_attention_layernorm.weight  TRAINABLE
+language_model.model.layers.21.mlp_action.gate_proj.weight    TRAINABLE
+language_model.model.layers.21.mlp_action.up_proj.weight      TRAINABLE
+language_model.model.layers.21.mlp_action.down_proj.weight    TRAINABLE
+language_model.model.layers.21.input_layernorm_action.weight  TRAINABLE
+language_model.model.layers.21.post_attention_layernorm_action.weight  TRAINABLE
+language_model.model.layers.22.self_attn.q_proj.weight        TRAINABLE
+language_model.model.layers.22.self_attn.k_proj.weight        TRAINABLE
+language_model.model.layers.22.self_attn.v_proj.weight        TRAINABLE
+language_model.model.layers.22.self_attn.o_proj.weight        TRAINABLE
+language_model.model.layers.22.self_attn.q_proj_action.weight  TRAINABLE
+language_model.model.layers.22.self_attn.k_proj_action.weight  TRAINABLE
+language_model.model.layers.22.self_attn.v_proj_action.weight  TRAINABLE
+language_model.model.layers.22.self_attn.o_proj_action.weight  TRAINABLE
+language_model.model.layers.22.mlp.gate_proj.weight           TRAINABLE
+language_model.model.layers.22.mlp.up_proj.weight             TRAINABLE
+language_model.model.layers.22.mlp.down_proj.weight           TRAINABLE
+language_model.model.layers.22.input_layernorm.weight         TRAINABLE
+language_model.model.layers.22.post_attention_layernorm.weight  TRAINABLE
+language_model.model.layers.22.mlp_action.gate_proj.weight    TRAINABLE
+language_model.model.layers.22.mlp_action.up_proj.weight      TRAINABLE
+language_model.model.layers.22.mlp_action.down_proj.weight    TRAINABLE
+language_model.model.layers.22.input_layernorm_action.weight  TRAINABLE
+language_model.model.layers.22.post_attention_layernorm_action.weight  TRAINABLE
+language_model.model.layers.23.self_attn.q_proj.weight        TRAINABLE
+language_model.model.layers.23.self_attn.k_proj.weight        TRAINABLE
+language_model.model.layers.23.self_attn.v_proj.weight        TRAINABLE
+language_model.model.layers.23.self_attn.o_proj.weight        TRAINABLE
+language_model.model.layers.23.self_attn.q_proj_action.weight  TRAINABLE
+language_model.model.layers.23.self_attn.k_proj_action.weight  TRAINABLE
+language_model.model.layers.23.self_attn.v_proj_action.weight  TRAINABLE
+language_model.model.layers.23.self_attn.o_proj_action.weight  TRAINABLE
+language_model.model.layers.23.mlp.gate_proj.weight           TRAINABLE
+language_model.model.layers.23.mlp.up_proj.weight             TRAINABLE
+language_model.model.layers.23.mlp.down_proj.weight           TRAINABLE
+language_model.model.layers.23.input_layernorm.weight         TRAINABLE
+language_model.model.layers.23.post_attention_layernorm.weight  TRAINABLE
+language_model.model.layers.23.mlp_action.gate_proj.weight    TRAINABLE
+language_model.model.layers.23.mlp_action.up_proj.weight      TRAINABLE
+language_model.model.layers.23.mlp_action.down_proj.weight    TRAINABLE
+language_model.model.layers.23.input_layernorm_action.weight  TRAINABLE
+language_model.model.layers.23.post_attention_layernorm_action.weight  TRAINABLE
+language_model.model.norm.weight                              TRAINABLE
+language_model.model.norm_action.weight                       TRAINABLE
+language_model.lm_head.weight                                 TRAINABLE
+x_embedder.mlp.fc1.weight                                     TRAINABLE
+x_embedder.mlp.fc1.bias                                       TRAINABLE
+x_embedder.mlp.fc2.weight                                     TRAINABLE
+x_embedder.mlp.fc2.bias                                       TRAINABLE
+t_embedder.mlp.0.weight                                       TRAINABLE
+t_embedder.mlp.0.bias                                         TRAINABLE
+t_embedder.mlp.2.weight                                       TRAINABLE
+t_embedder.mlp.2.bias                                         TRAINABLE
+final_layer.mlp.fc1.weight                                    TRAINABLE
+final_layer.mlp.fc1.bias                                      TRAINABLE
+final_layer.mlp.fc2.weight                                    TRAINABLE
+final_layer.mlp.fc2.bias                                      TRAINABLE
+cosmos_tokenizer._enc_model.encoder.conv_in.weight            FROZEN
+cosmos_tokenizer._enc_model.encoder.conv_in.bias              FROZEN
+cosmos_tokenizer._enc_model.encoder.down.0.block.0.norm1.weight  FROZEN
+cosmos_tokenizer._enc_model.encoder.down.0.block.0.norm1.bias  FROZEN
+cosmos_tokenizer._enc_model.encoder.down.0.block.0.conv1.weight  FROZEN
+cosmos_tokenizer._enc_model.encoder.down.0.block.0.conv1.bias  FROZEN
+cosmos_tokenizer._enc_model.encoder.down.0.block.0.norm2.weight  FROZEN
+cosmos_tokenizer._enc_model.encoder.down.0.block.0.norm2.bias  FROZEN
+cosmos_tokenizer._enc_model.encoder.down.0.block.0.conv2.weight  FROZEN
+cosmos_tokenizer._enc_model.encoder.down.0.block.0.conv2.bias  FROZEN
+cosmos_tokenizer._enc_model.encoder.down.0.block.0.nin_shortcut.weight  FROZEN
+cosmos_tokenizer._enc_model.encoder.down.0.block.0.nin_shortcut.bias  FROZEN
+cosmos_tokenizer._enc_model.encoder.down.0.block.1.norm1.weight  FROZEN
+cosmos_tokenizer._enc_model.encoder.down.0.block.1.norm1.bias  FROZEN
+cosmos_tokenizer._enc_model.encoder.down.0.block.1.conv1.weight  FROZEN
+cosmos_tokenizer._enc_model.encoder.down.0.block.1.conv1.bias  FROZEN
+cosmos_tokenizer._enc_model.encoder.down.0.block.1.norm2.weight  FROZEN
+cosmos_tokenizer._enc_model.encoder.down.0.block.1.norm2.bias  FROZEN
+cosmos_tokenizer._enc_model.encoder.down.0.block.1.conv2.weight  FROZEN
+cosmos_tokenizer._enc_model.encoder.down.0.block.1.conv2.bias  FROZEN
+cosmos_tokenizer._enc_model.encoder.down.0.downsample.conv.weight  FROZEN
+cosmos_tokenizer._enc_model.encoder.down.0.downsample.conv.bias  FROZEN
+cosmos_tokenizer._enc_model.encoder.down.1.block.0.norm1.weight  FROZEN
+cosmos_tokenizer._enc_model.encoder.down.1.block.0.norm1.bias  FROZEN
+cosmos_tokenizer._enc_model.encoder.down.1.block.0.conv1.weight  FROZEN
+cosmos_tokenizer._enc_model.encoder.down.1.block.0.conv1.bias  FROZEN
+cosmos_tokenizer._enc_model.encoder.down.1.block.0.norm2.weight  FROZEN
+cosmos_tokenizer._enc_model.encoder.down.1.block.0.norm2.bias  FROZEN
+cosmos_tokenizer._enc_model.encoder.down.1.block.0.conv2.weight  FROZEN
+cosmos_tokenizer._enc_model.encoder.down.1.block.0.conv2.bias  FROZEN
+cosmos_tokenizer._enc_model.encoder.down.1.block.0.nin_shortcut.weight  FROZEN
+cosmos_tokenizer._enc_model.encoder.down.1.block.0.nin_shortcut.bias  FROZEN
+cosmos_tokenizer._enc_model.encoder.down.1.block.1.norm1.weight  FROZEN
+cosmos_tokenizer._enc_model.encoder.down.1.block.1.norm1.bias  FROZEN
+cosmos_tokenizer._enc_model.encoder.down.1.block.1.conv1.weight  FROZEN
+cosmos_tokenizer._enc_model.encoder.down.1.block.1.conv1.bias  FROZEN
+cosmos_tokenizer._enc_model.encoder.down.1.block.1.norm2.weight  FROZEN
+cosmos_tokenizer._enc_model.encoder.down.1.block.1.norm2.bias  FROZEN
+cosmos_tokenizer._enc_model.encoder.down.1.block.1.conv2.weight  FROZEN
+cosmos_tokenizer._enc_model.encoder.down.1.block.1.conv2.bias  FROZEN
+cosmos_tokenizer._enc_model.encoder.down.2.block.0.norm1.weight  FROZEN
+cosmos_tokenizer._enc_model.encoder.down.2.block.0.norm1.bias  FROZEN
+cosmos_tokenizer._enc_model.encoder.down.2.block.0.conv1.weight  FROZEN
+cosmos_tokenizer._enc_model.encoder.down.2.block.0.conv1.bias  FROZEN
+cosmos_tokenizer._enc_model.encoder.down.2.block.0.norm2.weight  FROZEN
+cosmos_tokenizer._enc_model.encoder.down.2.block.0.norm2.bias  FROZEN
+cosmos_tokenizer._enc_model.encoder.down.2.block.0.conv2.weight  FROZEN
+cosmos_tokenizer._enc_model.encoder.down.2.block.0.conv2.bias  FROZEN
+cosmos_tokenizer._enc_model.encoder.down.2.block.1.norm1.weight  FROZEN
+cosmos_tokenizer._enc_model.encoder.down.2.block.1.norm1.bias  FROZEN
+cosmos_tokenizer._enc_model.encoder.down.2.block.1.conv1.weight  FROZEN
+cosmos_tokenizer._enc_model.encoder.down.2.block.1.conv1.bias  FROZEN
+cosmos_tokenizer._enc_model.encoder.down.2.block.1.norm2.weight  FROZEN
+cosmos_tokenizer._enc_model.encoder.down.2.block.1.norm2.bias  FROZEN
+cosmos_tokenizer._enc_model.encoder.down.2.block.1.conv2.weight  FROZEN
+cosmos_tokenizer._enc_model.encoder.down.2.block.1.conv2.bias  FROZEN
+cosmos_tokenizer._enc_model.encoder.mid.block_1.norm1.weight  FROZEN
+cosmos_tokenizer._enc_model.encoder.mid.block_1.norm1.bias    FROZEN
+cosmos_tokenizer._enc_model.encoder.mid.block_1.conv1.weight  FROZEN
+cosmos_tokenizer._enc_model.encoder.mid.block_1.conv1.bias    FROZEN
+cosmos_tokenizer._enc_model.encoder.mid.block_1.norm2.weight  FROZEN
+cosmos_tokenizer._enc_model.encoder.mid.block_1.norm2.bias    FROZEN
+cosmos_tokenizer._enc_model.encoder.mid.block_1.conv2.weight  FROZEN
+cosmos_tokenizer._enc_model.encoder.mid.block_1.conv2.bias    FROZEN
+cosmos_tokenizer._enc_model.encoder.mid.attn_1.norm.weight    FROZEN
+cosmos_tokenizer._enc_model.encoder.mid.attn_1.norm.bias      FROZEN
+cosmos_tokenizer._enc_model.encoder.mid.attn_1.q.weight       FROZEN
+cosmos_tokenizer._enc_model.encoder.mid.attn_1.q.bias         FROZEN
+cosmos_tokenizer._enc_model.encoder.mid.attn_1.k.weight       FROZEN
+cosmos_tokenizer._enc_model.encoder.mid.attn_1.k.bias         FROZEN
+cosmos_tokenizer._enc_model.encoder.mid.attn_1.v.weight       FROZEN
+cosmos_tokenizer._enc_model.encoder.mid.attn_1.v.bias         FROZEN
+cosmos_tokenizer._enc_model.encoder.mid.attn_1.proj_out.weight  FROZEN
+cosmos_tokenizer._enc_model.encoder.mid.attn_1.proj_out.bias  FROZEN
+cosmos_tokenizer._enc_model.encoder.mid.block_2.norm1.weight  FROZEN
+cosmos_tokenizer._enc_model.encoder.mid.block_2.norm1.bias    FROZEN
+cosmos_tokenizer._enc_model.encoder.mid.block_2.conv1.weight  FROZEN
+cosmos_tokenizer._enc_model.encoder.mid.block_2.conv1.bias    FROZEN
+cosmos_tokenizer._enc_model.encoder.mid.block_2.norm2.weight  FROZEN
+cosmos_tokenizer._enc_model.encoder.mid.block_2.norm2.bias    FROZEN
+cosmos_tokenizer._enc_model.encoder.mid.block_2.conv2.weight  FROZEN
+cosmos_tokenizer._enc_model.encoder.mid.block_2.conv2.bias    FROZEN
+cosmos_tokenizer._enc_model.encoder.norm_out.weight           FROZEN
+cosmos_tokenizer._enc_model.encoder.norm_out.bias             FROZEN
+cosmos_tokenizer._enc_model.encoder.conv_out.weight           FROZEN
+cosmos_tokenizer._enc_model.encoder.conv_out.bias             FROZEN
+cosmos_tokenizer._enc_model.quant_conv.weight                 FROZEN
+cosmos_tokenizer._enc_model.quant_conv.bias                   FROZEN
+cosmos_tokenizer._dec_model.post_quant_conv.weight            FROZEN
+cosmos_tokenizer._dec_model.post_quant_conv.bias              FROZEN
+cosmos_tokenizer._dec_model.decoder.conv_in.weight            FROZEN
+cosmos_tokenizer._dec_model.decoder.conv_in.bias              FROZEN
+cosmos_tokenizer._dec_model.decoder.mid.block_1.norm1.weight  FROZEN
+cosmos_tokenizer._dec_model.decoder.mid.block_1.norm1.bias    FROZEN
+cosmos_tokenizer._dec_model.decoder.mid.block_1.conv1.weight  FROZEN
+cosmos_tokenizer._dec_model.decoder.mid.block_1.conv1.bias    FROZEN
+cosmos_tokenizer._dec_model.decoder.mid.block_1.norm2.weight  FROZEN
+cosmos_tokenizer._dec_model.decoder.mid.block_1.norm2.bias    FROZEN
+cosmos_tokenizer._dec_model.decoder.mid.block_1.conv2.weight  FROZEN
+cosmos_tokenizer._dec_model.decoder.mid.block_1.conv2.bias    FROZEN
+cosmos_tokenizer._dec_model.decoder.mid.attn_1.norm.weight    FROZEN
+cosmos_tokenizer._dec_model.decoder.mid.attn_1.norm.bias      FROZEN
+cosmos_tokenizer._dec_model.decoder.mid.attn_1.q.weight       FROZEN
+cosmos_tokenizer._dec_model.decoder.mid.attn_1.q.bias         FROZEN
+cosmos_tokenizer._dec_model.decoder.mid.attn_1.k.weight       FROZEN
+cosmos_tokenizer._dec_model.decoder.mid.attn_1.k.bias         FROZEN
+cosmos_tokenizer._dec_model.decoder.mid.attn_1.v.weight       FROZEN
+cosmos_tokenizer._dec_model.decoder.mid.attn_1.v.bias         FROZEN
+cosmos_tokenizer._dec_model.decoder.mid.attn_1.proj_out.weight  FROZEN
+cosmos_tokenizer._dec_model.decoder.mid.attn_1.proj_out.bias  FROZEN
+cosmos_tokenizer._dec_model.decoder.mid.block_2.norm1.weight  FROZEN
+cosmos_tokenizer._dec_model.decoder.mid.block_2.norm1.bias    FROZEN
+cosmos_tokenizer._dec_model.decoder.mid.block_2.conv1.weight  FROZEN
+cosmos_tokenizer._dec_model.decoder.mid.block_2.conv1.bias    FROZEN
+cosmos_tokenizer._dec_model.decoder.mid.block_2.norm2.weight  FROZEN
+cosmos_tokenizer._dec_model.decoder.mid.block_2.norm2.bias    FROZEN
+cosmos_tokenizer._dec_model.decoder.mid.block_2.conv2.weight  FROZEN
+cosmos_tokenizer._dec_model.decoder.mid.block_2.conv2.bias    FROZEN
+cosmos_tokenizer._dec_model.decoder.up.0.block.0.norm1.weight  FROZEN
+cosmos_tokenizer._dec_model.decoder.up.0.block.0.norm1.bias   FROZEN
+cosmos_tokenizer._dec_model.decoder.up.0.block.0.conv1.weight  FROZEN
+cosmos_tokenizer._dec_model.decoder.up.0.block.0.conv1.bias   FROZEN
+cosmos_tokenizer._dec_model.decoder.up.0.block.0.norm2.weight  FROZEN
+cosmos_tokenizer._dec_model.decoder.up.0.block.0.norm2.bias   FROZEN
+cosmos_tokenizer._dec_model.decoder.up.0.block.0.conv2.weight  FROZEN
+cosmos_tokenizer._dec_model.decoder.up.0.block.0.conv2.bias   FROZEN
+cosmos_tokenizer._dec_model.decoder.up.0.block.0.nin_shortcut.weight  FROZEN
+cosmos_tokenizer._dec_model.decoder.up.0.block.0.nin_shortcut.bias  FROZEN
+cosmos_tokenizer._dec_model.decoder.up.0.block.1.norm1.weight  FROZEN
+cosmos_tokenizer._dec_model.decoder.up.0.block.1.norm1.bias   FROZEN
+cosmos_tokenizer._dec_model.decoder.up.0.block.1.conv1.weight  FROZEN
+cosmos_tokenizer._dec_model.decoder.up.0.block.1.conv1.bias   FROZEN
+cosmos_tokenizer._dec_model.decoder.up.0.block.1.norm2.weight  FROZEN
+cosmos_tokenizer._dec_model.decoder.up.0.block.1.norm2.bias   FROZEN
+cosmos_tokenizer._dec_model.decoder.up.0.block.1.conv2.weight  FROZEN
+cosmos_tokenizer._dec_model.decoder.up.0.block.1.conv2.bias   FROZEN
+cosmos_tokenizer._dec_model.decoder.up.0.block.2.norm1.weight  FROZEN
+cosmos_tokenizer._dec_model.decoder.up.0.block.2.norm1.bias   FROZEN
+cosmos_tokenizer._dec_model.decoder.up.0.block.2.conv1.weight  FROZEN
+cosmos_tokenizer._dec_model.decoder.up.0.block.2.conv1.bias   FROZEN
+cosmos_tokenizer._dec_model.decoder.up.0.block.2.norm2.weight  FROZEN
+cosmos_tokenizer._dec_model.decoder.up.0.block.2.norm2.bias   FROZEN
+cosmos_tokenizer._dec_model.decoder.up.0.block.2.conv2.weight  FROZEN
+cosmos_tokenizer._dec_model.decoder.up.0.block.2.conv2.bias   FROZEN
+cosmos_tokenizer._dec_model.decoder.up.1.block.0.norm1.weight  FROZEN
+cosmos_tokenizer._dec_model.decoder.up.1.block.0.norm1.bias   FROZEN
+cosmos_tokenizer._dec_model.decoder.up.1.block.0.conv1.weight  FROZEN
+cosmos_tokenizer._dec_model.decoder.up.1.block.0.conv1.bias   FROZEN
+cosmos_tokenizer._dec_model.decoder.up.1.block.0.norm2.weight  FROZEN
+cosmos_tokenizer._dec_model.decoder.up.1.block.0.norm2.bias   FROZEN
+cosmos_tokenizer._dec_model.decoder.up.1.block.0.conv2.weight  FROZEN
+cosmos_tokenizer._dec_model.decoder.up.1.block.0.conv2.bias   FROZEN
+cosmos_tokenizer._dec_model.decoder.up.1.block.1.norm1.weight  FROZEN
+cosmos_tokenizer._dec_model.decoder.up.1.block.1.norm1.bias   FROZEN
+cosmos_tokenizer._dec_model.decoder.up.1.block.1.conv1.weight  FROZEN
+cosmos_tokenizer._dec_model.decoder.up.1.block.1.conv1.bias   FROZEN
+cosmos_tokenizer._dec_model.decoder.up.1.block.1.norm2.weight  FROZEN
+cosmos_tokenizer._dec_model.decoder.up.1.block.1.norm2.bias   FROZEN
+cosmos_tokenizer._dec_model.decoder.up.1.block.1.conv2.weight  FROZEN
+cosmos_tokenizer._dec_model.decoder.up.1.block.1.conv2.bias   FROZEN
+cosmos_tokenizer._dec_model.decoder.up.1.block.2.norm1.weight  FROZEN
+cosmos_tokenizer._dec_model.decoder.up.1.block.2.norm1.bias   FROZEN
+cosmos_tokenizer._dec_model.decoder.up.1.block.2.conv1.weight  FROZEN
+cosmos_tokenizer._dec_model.decoder.up.1.block.2.conv1.bias   FROZEN
+cosmos_tokenizer._dec_model.decoder.up.1.block.2.norm2.weight  FROZEN
+cosmos_tokenizer._dec_model.decoder.up.1.block.2.norm2.bias   FROZEN
+cosmos_tokenizer._dec_model.decoder.up.1.block.2.conv2.weight  FROZEN
+cosmos_tokenizer._dec_model.decoder.up.1.block.2.conv2.bias   FROZEN
+cosmos_tokenizer._dec_model.decoder.up.2.block.0.norm1.weight  FROZEN
+cosmos_tokenizer._dec_model.decoder.up.2.block.0.norm1.bias   FROZEN
+cosmos_tokenizer._dec_model.decoder.up.2.block.0.conv1.weight  FROZEN
+cosmos_tokenizer._dec_model.decoder.up.2.block.0.conv1.bias   FROZEN
+cosmos_tokenizer._dec_model.decoder.up.2.block.0.norm2.weight  FROZEN
+cosmos_tokenizer._dec_model.decoder.up.2.block.0.norm2.bias   FROZEN
+cosmos_tokenizer._dec_model.decoder.up.2.block.0.conv2.weight  FROZEN
+cosmos_tokenizer._dec_model.decoder.up.2.block.0.conv2.bias   FROZEN
+cosmos_tokenizer._dec_model.decoder.up.2.block.1.norm1.weight  FROZEN
+cosmos_tokenizer._dec_model.decoder.up.2.block.1.norm1.bias   FROZEN
+cosmos_tokenizer._dec_model.decoder.up.2.block.1.conv1.weight  FROZEN
+cosmos_tokenizer._dec_model.decoder.up.2.block.1.conv1.bias   FROZEN
+cosmos_tokenizer._dec_model.decoder.up.2.block.1.norm2.weight  FROZEN
+cosmos_tokenizer._dec_model.decoder.up.2.block.1.norm2.bias   FROZEN
+cosmos_tokenizer._dec_model.decoder.up.2.block.1.conv2.weight  FROZEN
+cosmos_tokenizer._dec_model.decoder.up.2.block.1.conv2.bias   FROZEN
+cosmos_tokenizer._dec_model.decoder.up.2.block.2.norm1.weight  FROZEN
+cosmos_tokenizer._dec_model.decoder.up.2.block.2.norm1.bias   FROZEN
+cosmos_tokenizer._dec_model.decoder.up.2.block.2.conv1.weight  FROZEN
+cosmos_tokenizer._dec_model.decoder.up.2.block.2.conv1.bias   FROZEN
+cosmos_tokenizer._dec_model.decoder.up.2.block.2.norm2.weight  FROZEN
+cosmos_tokenizer._dec_model.decoder.up.2.block.2.norm2.bias   FROZEN
+cosmos_tokenizer._dec_model.decoder.up.2.block.2.conv2.weight  FROZEN
+cosmos_tokenizer._dec_model.decoder.up.2.block.2.conv2.bias   FROZEN
+cosmos_tokenizer._dec_model.decoder.up.2.upsample.conv.weight  FROZEN
+cosmos_tokenizer._dec_model.decoder.up.2.upsample.conv.bias   FROZEN
+cosmos_tokenizer._dec_model.decoder.norm_out.weight           FROZEN
+cosmos_tokenizer._dec_model.decoder.norm_out.bias             FROZEN
+cosmos_tokenizer._dec_model.decoder.conv_out.weight           FROZEN
+cosmos_tokenizer._dec_model.decoder.conv_out.bias             FROZEN
+gen_in_proj.weight                                            TRAINABLE
+gen_in_proj.bias                                              TRAINABLE
+downsample_conv.weight                                        TRAINABLE
+downsample_conv.bias                                          TRAINABLE
+upsample_conv.weight                                          TRAINABLE
+upsample_conv.bias                                            TRAINABLE
+gen_out_layer_norm.weight                                     TRAINABLE
+gen_out_layer_norm.bias                                       TRAINABLE
+gen_out_proj.weight                                           TRAINABLE
+gen_out_proj.bias                                             TRAINABLE
+Load action from latent: 0
+Load action from pretrain: 1
+Total parameters: 5.56B
+Trainable parameters: 5.09B
+Non-trainable parameters: 0.47B
+Trainable ratio: 91.52%
+Total data amount: 52970
+[2026-03-22 20:54:56,819] [INFO] [logging.py:128:log_dist] [Rank 0] DeepSpeed info: version=0.15.4, git-hash=unknown, git-branch=unknown
+[2026-03-22 20:54:56,819] [INFO] [config.py:733:__init__] Config mesh_device None world_size = 2
+[2026-03-22 20:54:56,819] [INFO] [config.py:733:__init__] Config mesh_device None world_size = 2
+[2026-03-22 20:56:32,436] [INFO] [logging.py:128:log_dist] [Rank 0] DeepSpeed Flops Profiler Enabled: False
+[2026-03-22 20:56:32,535] [INFO] [logging.py:128:log_dist] [Rank 0] Using client Optimizer as basic optimizer
+[2026-03-22 20:56:32,535] [INFO] [logging.py:128:log_dist] [Rank 0] Removing param_group that has no 'params' in the basic Optimizer
+[2026-03-22 20:56:32,651] [INFO] [logging.py:128:log_dist] [Rank 0] DeepSpeed Basic Optimizer = AdamW
+[2026-03-22 20:56:32,652] [INFO] [utils.py:59:is_zero_supported_optimizer] Checking ZeRO support for optimizer=AdamW type=<class 'torch.optim.adamw.AdamW'>
+[2026-03-22 20:56:32,652] [INFO] [logging.py:128:log_dist] [Rank 0] Creating torch.bfloat16 ZeRO stage 1 optimizer
+[2026-03-22 20:56:32,714] [INFO] [stage_1_and_2.py:149:__init__] Reduce bucket size 500000000
+[2026-03-22 20:56:32,715] [INFO] [stage_1_and_2.py:150:__init__] Allgather bucket size 500000000
+[2026-03-22 20:56:32,715] [INFO] [stage_1_and_2.py:151:__init__] CPU Offload: False
+[2026-03-22 20:56:32,715] [INFO] [stage_1_and_2.py:152:__init__] Round robin gradient partitioning: False
+[2026-03-22 20:57:15,155] [INFO] [utils.py:781:see_memory_usage] Before initializing optimizer states
+[2026-03-22 20:57:15,161] [INFO] [utils.py:782:see_memory_usage] MA 20.0 GB         Max_MA 20.0 GB         CA 20.01 GB         Max_CA 20 GB 
+[2026-03-22 20:57:15,215] [INFO] [utils.py:789:see_memory_usage] CPU Virtual Memory:  used = 160.88 GB, percent = 16.0%
+[2026-03-22 20:57:16,543] [INFO] [utils.py:781:see_memory_usage] After initializing optimizer states
+[2026-03-22 20:57:16,544] [INFO] [utils.py:782:see_memory_usage] MA 20.0 GB         Max_MA 29.48 GB         CA 29.49 GB         Max_CA 29 GB 
+[2026-03-22 20:57:16,545] [INFO] [utils.py:789:see_memory_usage] CPU Virtual Memory:  used = 160.9 GB, percent = 16.0%
+[2026-03-22 20:57:16,545] [INFO] [stage_1_and_2.py:544:__init__] optimizer state initialized
+[2026-03-22 20:57:17,956] [INFO] [utils.py:781:see_memory_usage] After initializing ZeRO optimizer
+[2026-03-22 20:57:18,015] [INFO] [utils.py:782:see_memory_usage] MA 20.0 GB         Max_MA 20.0 GB         CA 29.49 GB         Max_CA 29 GB 
+[2026-03-22 20:57:18,016] [INFO] [utils.py:789:see_memory_usage] CPU Virtual Memory:  used = 160.92 GB, percent = 16.0%
+[2026-03-22 20:57:18,033] [INFO] [logging.py:128:log_dist] [Rank 0] DeepSpeed Final Optimizer = DeepSpeedZeroOptimizer
+[2026-03-22 20:57:18,034] [INFO] [logging.py:128:log_dist] [Rank 0] DeepSpeed using configured LR scheduler = None
+[2026-03-22 20:57:18,034] [INFO] [logging.py:128:log_dist] [Rank 0] DeepSpeed LR Scheduler = None
+[2026-03-22 20:57:18,035] [INFO] [logging.py:128:log_dist] [Rank 0] step=0, skipped=0, lr=[0.0001, 0.0001], mom=[(0.9, 0.999), (0.9, 0.999)]
+[2026-03-22 20:57:18,472] [INFO] [config.py:999:print] DeepSpeedEngine configuration:
+[2026-03-22 20:57:18,515] [INFO] [config.py:1003:print]   activation_checkpointing_config  {
+    "partition_activations": false, 
+    "contiguous_memory_optimization": false, 
+    "cpu_checkpointing": false, 
+    "number_checkpoints": null, 
+    "synchronize_checkpoint_boundary": false, 
+    "profile": false
+}
+[2026-03-22 20:57:18,517] [INFO] [config.py:1003:print]   aio_config ................... {'block_size': 1048576, 'queue_depth': 8, 'thread_count': 1, 'single_submit': False, 'overlap_events': True, 'use_gds': False}
+[2026-03-22 20:57:18,517] [INFO] [config.py:1003:print]   amp_enabled .................. False
+[2026-03-22 20:57:18,518] [INFO] [config.py:1003:print]   amp_params ................... False
+[2026-03-22 20:57:18,519] [INFO] [config.py:1003:print]   autotuning_config ............ {
+    "enabled": false, 
+    "start_step": null, 
+    "end_step": null, 
+    "metric_path": null, 
+    "arg_mappings": null, 
+    "metric": "throughput", 
+    "model_info": null, 
+    "results_dir": "autotuning_results", 
+    "exps_dir": "autotuning_exps", 
+    "overwrite": true, 
+    "fast": true, 
+    "start_profile_step": 3, 
+    "end_profile_step": 5, 
+    "tuner_type": "gridsearch", 
+    "tuner_early_stopping": 5, 
+    "tuner_num_trials": 50, 
+    "model_info_path": null, 
+    "mp_size": 1, 
+    "max_train_batch_size": null, 
+    "min_train_batch_size": 1, 
+    "max_train_micro_batch_size_per_gpu": 1.024000e+03, 
+    "min_train_micro_batch_size_per_gpu": 1, 
+    "num_tuning_micro_batch_sizes": 3
+}
+[2026-03-22 20:57:18,519] [INFO] [config.py:1003:print]   bfloat16_enabled ............. True
+[2026-03-22 20:57:18,520] [INFO] [config.py:1003:print]   bfloat16_immediate_grad_update  False
+[2026-03-22 20:57:18,520] [INFO] [config.py:1003:print]   checkpoint_parallel_write_pipeline  False
+[2026-03-22 20:57:18,521] [INFO] [config.py:1003:print]   checkpoint_tag_validation_enabled  True
+[2026-03-22 20:57:18,521] [INFO] [config.py:1003:print]   checkpoint_tag_validation_fail  False
+[2026-03-22 20:57:18,521] [INFO] [config.py:1003:print]   comms_config ................. <deepspeed.comm.config.DeepSpeedCommsConfig object at 0x7faeb44171f0>
+[2026-03-22 20:57:18,522] [INFO] [config.py:1003:print]   communication_data_type ...... None
+[2026-03-22 20:57:18,522] [INFO] [config.py:1003:print]   compression_config ........... {'weight_quantization': {'shared_parameters': {'enabled': False, 'quantizer_kernel': False, 'schedule_offset': 0, 'quantize_groups': 1, 'quantize_verbose': False, 'quantization_type': 'symmetric', 'quantize_weight_in_forward': False, 'rounding': 'nearest', 'fp16_mixed_quantize': False, 'quantize_change_ratio': 0.001}, 'different_groups': {}}, 'activation_quantization': {'shared_parameters': {'enabled': False, 'quantization_type': 'symmetric', 'range_calibration': 'dynamic', 'schedule_offset': 1000}, 'different_groups': {}}, 'sparse_pruning': {'shared_parameters': {'enabled': False, 'method': 'l1', 'schedule_offset': 1000}, 'different_groups': {}}, 'row_pruning': {'shared_parameters': {'enabled': False, 'method': 'l1', 'schedule_offset': 1000}, 'different_groups': {}}, 'head_pruning': {'shared_parameters': {'enabled': False, 'method': 'topk', 'schedule_offset': 1000}, 'different_groups': {}}, 'channel_pruning': {'shared_parameters': {'enabled': False, 'method': 'l1', 'schedule_offset': 1000}, 'different_groups': {}}, 'layer_reduction': {'enabled': False}}
+[2026-03-22 20:57:18,523] [INFO] [config.py:1003:print]   curriculum_enabled_legacy .... False
+[2026-03-22 20:57:18,523] [INFO] [config.py:1003:print]   curriculum_params_legacy ..... False
+[2026-03-22 20:57:18,524] [INFO] [config.py:1003:print]   data_efficiency_config ....... {'enabled': False, 'seed': 1234, 'data_sampling': {'enabled': False, 'num_epochs': 1000, 'num_workers': 0, 'curriculum_learning': {'enabled': False}}, 'data_routing': {'enabled': False, 'random_ltd': {'enabled': False, 'layer_token_lr_schedule': {'enabled': False}}}}
+[2026-03-22 20:57:18,524] [INFO] [config.py:1003:print]   data_efficiency_enabled ...... False
+[2026-03-22 20:57:18,525] [INFO] [config.py:1003:print]   dataloader_drop_last ......... False
+[2026-03-22 20:57:18,525] [INFO] [config.py:1003:print]   disable_allgather ............ False
+[2026-03-22 20:57:18,525] [INFO] [config.py:1003:print]   dump_state ................... False
+[2026-03-22 20:57:18,526] [INFO] [config.py:1003:print]   dynamic_loss_scale_args ...... None
+[2026-03-22 20:57:18,526] [INFO] [config.py:1003:print]   eigenvalue_enabled ........... False
+[2026-03-22 20:57:18,527] [INFO] [config.py:1003:print]   eigenvalue_gas_boundary_resolution  1
+[2026-03-22 20:57:18,527] [INFO] [config.py:1003:print]   eigenvalue_layer_name ........ bert.encoder.layer
+[2026-03-22 20:57:18,527] [INFO] [config.py:1003:print]   eigenvalue_layer_num ......... 0
+[2026-03-22 20:57:18,528] [INFO] [config.py:1003:print]   eigenvalue_max_iter .......... 100
+[2026-03-22 20:57:18,528] [INFO] [config.py:1003:print]   eigenvalue_stability ......... 1e-06
+[2026-03-22 20:57:18,528] [INFO] [config.py:1003:print]   eigenvalue_tol ............... 0.01
+[2026-03-22 20:57:18,529] [INFO] [config.py:1003:print]   eigenvalue_verbose ........... False
+[2026-03-22 20:57:18,529] [INFO] [config.py:1003:print]   elasticity_enabled ........... False
+[2026-03-22 20:57:18,529] [INFO] [config.py:1003:print]   flops_profiler_config ........ {
+    "enabled": false, 
+    "recompute_fwd_factor": 0.0, 
+    "profile_step": 1, 
+    "module_depth": -1, 
+    "top_modules": 1, 
+    "detailed": true, 
+    "output_file": null
+}
+[2026-03-22 20:57:18,530] [INFO] [config.py:1003:print]   fp16_auto_cast ............... None
+[2026-03-22 20:57:18,530] [INFO] [config.py:1003:print]   fp16_enabled ................. False
+[2026-03-22 20:57:18,531] [INFO] [config.py:1003:print]   fp16_master_weights_and_gradients  False
+[2026-03-22 20:57:18,531] [INFO] [config.py:1003:print]   global_rank .................. 0
+[2026-03-22 20:57:18,531] [INFO] [config.py:1003:print]   grad_accum_dtype ............. None
+[2026-03-22 20:57:18,532] [INFO] [config.py:1003:print]   gradient_accumulation_steps .. 2
+[2026-03-22 20:57:18,532] [INFO] [config.py:1003:print]   gradient_clipping ............ 1.0
+[2026-03-22 20:57:18,534] [INFO] [config.py:1003:print]   gradient_predivide_factor .... 1.0
+[2026-03-22 20:57:18,534] [INFO] [config.py:1003:print]   graph_harvesting ............. False
+[2026-03-22 20:57:18,534] [INFO] [config.py:1003:print]   hybrid_engine ................ enabled=False max_out_tokens=512 inference_tp_size=1 release_inference_cache=False pin_parameters=True tp_gather_partition_size=8
+[2026-03-22 20:57:18,534] [INFO] [config.py:1003:print]   initial_dynamic_scale ........ 1
+[2026-03-22 20:57:18,535] [INFO] [config.py:1003:print]   load_universal_checkpoint .... False
+[2026-03-22 20:57:18,535] [INFO] [config.py:1003:print]   loss_scale ................... 1.0
+[2026-03-22 20:57:18,535] [INFO] [config.py:1003:print]   memory_breakdown ............. False
+[2026-03-22 20:57:18,535] [INFO] [config.py:1003:print]   mics_hierarchial_params_gather  False
+[2026-03-22 20:57:18,535] [INFO] [config.py:1003:print]   mics_shard_size .............. -1
+[2026-03-22 20:57:18,535] [INFO] [config.py:1003:print]   monitor_config ............... tensorboard=TensorBoardConfig(enabled=False, output_path='', job_name='DeepSpeedJobName') comet=CometConfig(enabled=False, samples_log_interval=100, project=None, workspace=None, api_key=None, experiment_name=None, experiment_key=None, online=None, mode=None) wandb=WandbConfig(enabled=False, group=None, team=None, project='deepspeed') csv_monitor=CSVConfig(enabled=False, output_path='', job_name='DeepSpeedJobName')
+[2026-03-22 20:57:18,536] [INFO] [config.py:1003:print]   nebula_config ................ {
+    "enabled": false, 
+    "persistent_storage_path": null, 
+    "persistent_time_interval": 100, 
+    "num_of_version_in_retention": 2, 
+    "enable_nebula_load": true, 
+    "load_path": null
+}
+[2026-03-22 20:57:18,536] [INFO] [config.py:1003:print]   optimizer_legacy_fusion ...... False
+[2026-03-22 20:57:18,536] [INFO] [config.py:1003:print]   optimizer_name ............... None
+[2026-03-22 20:57:18,536] [INFO] [config.py:1003:print]   optimizer_params ............. None
+[2026-03-22 20:57:18,536] [INFO] [config.py:1003:print]   pipeline ..................... {'stages': 'auto', 'partition': 'best', 'seed_layers': False, 'activation_checkpoint_interval': 0, 'pipe_partitioned': True, 'grad_partitioned': True}
+[2026-03-22 20:57:18,537] [INFO] [config.py:1003:print]   pld_enabled .................. False
+[2026-03-22 20:57:18,537] [INFO] [config.py:1003:print]   pld_params ................... False
+[2026-03-22 20:57:18,537] [INFO] [config.py:1003:print]   prescale_gradients ........... False
+[2026-03-22 20:57:18,538] [INFO] [config.py:1003:print]   scheduler_name ............... None
+[2026-03-22 20:57:18,538] [INFO] [config.py:1003:print]   scheduler_params ............. None
+[2026-03-22 20:57:18,538] [INFO] [config.py:1003:print]   seq_parallel_communication_data_type  torch.float32
+[2026-03-22 20:57:18,539] [INFO] [config.py:1003:print]   sparse_attention ............. None
+[2026-03-22 20:57:18,539] [INFO] [config.py:1003:print]   sparse_gradients_enabled ..... False
+[2026-03-22 20:57:18,539] [INFO] [config.py:1003:print]   steps_per_print .............. inf
+[2026-03-22 20:57:18,540] [INFO] [config.py:1003:print]   timers_config ................ enabled=True synchronized=True
+[2026-03-22 20:57:18,540] [INFO] [config.py:1003:print]   train_batch_size ............. 4
+[2026-03-22 20:57:18,541] [INFO] [config.py:1003:print]   train_micro_batch_size_per_gpu  1
+[2026-03-22 20:57:18,541] [INFO] [config.py:1003:print]   use_data_before_expert_parallel_  False
+[2026-03-22 20:57:18,541] [INFO] [config.py:1003:print]   use_node_local_storage ....... False
+[2026-03-22 20:57:18,541] [INFO] [config.py:1003:print]   wall_clock_breakdown ......... False
+[2026-03-22 20:57:18,542] [INFO] [config.py:1003:print]   weight_quantization_config ... None
+[2026-03-22 20:57:18,542] [INFO] [config.py:1003:print]   world_size ................... 2
+[2026-03-22 20:57:18,542] [INFO] [config.py:1003:print]   zero_allow_untested_optimizer  True
+[2026-03-22 20:57:18,543] [INFO] [config.py:1003:print]   zero_config .................. stage=1 contiguous_gradients=True reduce_scatter=True reduce_bucket_size=500000000 use_multi_rank_bucket_allreduce=True allgather_partitions=True allgather_bucket_size=500000000 overlap_comm=False load_from_fp32_weights=True elastic_checkpoint=False offload_param=DeepSpeedZeroOffloadParamConfig(device='none', nvme_path=None, buffer_count=5, buffer_size=100000000, max_in_cpu=1000000000, pin_memory=False) offload_optimizer=DeepSpeedZeroOffloadOptimizerConfig(device='none', nvme_path=None, buffer_count=4, pin_memory=False, pipeline_read=False, pipeline_write=False, fast_init=False, ratio=1.0) sub_group_size=1000000000 cpu_offload_param=None cpu_offload_use_pin_memory=None cpu_offload=None prefetch_bucket_size=50000000 param_persistence_threshold=100000 model_persistence_threshold=9223372036854775807 max_live_parameters=1000000000 max_reuse_distance=1000000000 gather_16bit_weights_on_model_save=True use_all_reduce_for_fetch_params=False stage3_gather_fp16_weights_on_model_save=False ignore_unused_parameters=True legacy_stage1=False round_robin_gradients=False zero_hpz_partition_size=1 zero_quantized_weights=False zero_quantized_nontrainable_weights=False zero_quantized_gradients=False mics_shard_size=-1 mics_hierarchical_params_gather=False memory_efficient_linear=True pipeline_loading_checkpoint=False override_module_apply=True
+[2026-03-22 20:57:18,543] [INFO] [config.py:1003:print]   zero_enabled ................. True
+[2026-03-22 20:57:18,543] [INFO] [config.py:1003:print]   zero_force_ds_cpu_optimizer .. True
+[2026-03-22 20:57:18,544] [INFO] [config.py:1003:print]   zero_optimization_stage ...... 1
+[2026-03-22 20:57:18,544] [INFO] [config.py:989:print_user_config]   json = {
+    "train_batch_size": 4, 
+    "train_micro_batch_size_per_gpu": 1, 
+    "gradient_accumulation_steps": 2, 
+    "zero_optimization": {
+        "stage": 1, 
+        "offload_optimizer": {
+            "device": "none", 
+            "nvme_path": null
+        }, 
+        "offload_param": {
+            "device": "none", 
+            "nvme_path": null
+        }, 
+        "stage3_gather_16bit_weights_on_model_save": true
+    }, 
+    "gradient_clipping": 1.0, 
+    "steps_per_print": inf, 
+    "bf16": {
+        "enabled": true
+    }, 
+    "fp16": {
+        "enabled": false
+    }, 
+    "zero_allow_untested_optimizer": true
+}
+[rank1]: Traceback (most recent call last):
+[rank1]:   File "/mnt/dataset/share_code/code/last0_exp/scripts/train_wopc.py", line 902, in <module>
+[rank1]:     train(args)     
+[rank1]:   File "/mnt/dataset/share_code/code/last0_exp/scripts/train_wopc.py", line 802, in train
+[rank1]:     accelerator.backward(loss)
+[rank1]:   File "/mnt/dataset/share_code/conda_envs/last05_hwb/lib/python3.10/site-packages/accelerate/accelerator.py", line 2545, in backward
+[rank1]:     self.deepspeed_engine_wrapped.backward(loss, sync_gradients=self.sync_gradients, **kwargs)
+[rank1]:   File "/mnt/dataset/share_code/conda_envs/last05_hwb/lib/python3.10/site-packages/accelerate/utils/deepspeed.py", line 281, in backward
+[rank1]:     self.engine.step()
+[rank1]:   File "/mnt/dataset/share_code/conda_envs/last05_hwb/lib/python3.10/site-packages/deepspeed/runtime/engine.py", line 2213, in step
+[rank1]:     self._take_model_step(lr_kwargs)
+[rank1]:   File "/mnt/dataset/share_code/conda_envs/last05_hwb/lib/python3.10/site-packages/deepspeed/runtime/engine.py", line 2119, in _take_model_step
+[rank1]:     self.optimizer.step()
+[rank1]:   File "/mnt/dataset/share_code/conda_envs/last05_hwb/lib/python3.10/site-packages/deepspeed/runtime/zero/stage_1_and_2.py", line 1885, in step
+[rank1]:     int(self.partition_size[i])).to(self.single_partition_of_fp32_groups[i].dtype)
+[rank1]: torch.OutOfMemoryError: CUDA out of memory. Tried to allocate 9.48 GiB. GPU 1 has a total capacity of 79.33 GiB of which 5.96 GiB is free. Process 1949937 has 73.35 GiB memory in use. Of the allocated memory 48.89 GiB is allocated by PyTorch, and 23.27 GiB is reserved by PyTorch but unallocated. If reserved but unallocated memory is large try setting PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True to avoid fragmentation.  See documentation for Memory Management  (https://pytorch.org/docs/stable/notes/cuda.html#environment-variables)
+W0322 20:57:59.030000 234982 site-packages/torch/distributed/elastic/multiprocessing/api.py:900] Sending process 236735 closing signal SIGTERM
+E0322 20:58:00.164000 234982 site-packages/torch/distributed/elastic/multiprocessing/api.py:874] failed (exitcode: 1) local_rank: 1 (pid: 236736) of binary: /mnt/dataset/share_code/conda_envs/last05_hwb/bin/python3.10
+Traceback (most recent call last):
+  File "/mnt/dataset/share_code/conda_envs/last05_hwb/bin/accelerate", line 6, in <module>
+    sys.exit(main())
+  File "/mnt/dataset/share_code/conda_envs/last05_hwb/lib/python3.10/site-packages/accelerate/commands/accelerate_cli.py", line 50, in main
+    args.func(args)
+  File "/mnt/dataset/share_code/conda_envs/last05_hwb/lib/python3.10/site-packages/accelerate/commands/launch.py", line 1184, in launch_command
+    deepspeed_launcher(args)
+  File "/mnt/dataset/share_code/conda_envs/last05_hwb/lib/python3.10/site-packages/accelerate/commands/launch.py", line 868, in deepspeed_launcher
+    distrib_run.run(args)
+  File "/mnt/dataset/share_code/conda_envs/last05_hwb/lib/python3.10/site-packages/torch/distributed/run.py", line 883, in run
+    elastic_launch(
+  File "/mnt/dataset/share_code/conda_envs/last05_hwb/lib/python3.10/site-packages/torch/distributed/launcher/api.py", line 139, in __call__
+    return launch_agent(self._config, self._entrypoint, list(args))
+  File "/mnt/dataset/share_code/conda_envs/last05_hwb/lib/python3.10/site-packages/torch/distributed/launcher/api.py", line 270, in launch_agent
+    raise ChildFailedError(
+torch.distributed.elastic.multiprocessing.errors.ChildFailedError: 
+============================================================
+train_wopc.py FAILED
+------------------------------------------------------------
+Failures:
+  <NO_OTHER_FAILURES>
+------------------------------------------------------------
+Root Cause (first observed failure):
+[0]:
+  time      : 2026-03-22_20:57:59
+  host      : aibox-rf91a121efaa-855ddb5cdf-r5bst
+  rank      : 1 (local_rank: 1)
+  exitcode  : 1 (pid: 236736)
+  error_file: <N/A>
+  traceback : To enable traceback see: https://pytorch.org/docs/stable/elastic/errors.html
+============================================================
+(/mnt/dataset/share_code/conda_envs/last05_hwb) ➜  last0_exp git:(hwb) ✗ 

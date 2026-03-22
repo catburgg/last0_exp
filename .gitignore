@@ -13,3 +13,6 @@ __pycache__/
 sample*
 .vscode/
 .claude/
+ckpt
+
+记录.md

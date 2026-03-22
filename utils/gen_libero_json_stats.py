@@ -238,23 +238,34 @@ def cal_stats(jsonl_filename):
 
 ######## ---------main---------- #########
 
-data_root = "/mnt/wfm/ckpt/data/data_libero/libero_npy"
-img_save_root = "/mnt/wfm/ckpt/data/data_libero/libero_training_data/libero_images"
-json_save_root = "/mnt/wfm/ckpt/data/data_libero/libero_training_data/libero_json"
-
-jsonl_filename = f'{json_save_root}/libero_spatial_no_noops_view2_chunk4_16_stride8_fast1_sparse_fastslow_train.jsonl'
-json_file = f'{json_save_root}/libero_spatial_no_noops_view2_chunk4_16_stride8_fast1_sparse_fastslow_train.json'
-task_lists = [
-  'libero_spatial_no_noops',
-#   'libero_goal_no_noops',
-#   'libero_object_no_noops',
-#   'libero_10_no_noops'
-]
+data_root = "/mnt/dataset/share_code/hf_cache/libero_npy"
+img_save_root = "/mnt/dataset/share_code/dataset/libero_training_data/libero_images"
+json_save_root = "/mnt/dataset/share_code/dataset/libero_training_data/libero_json"
 
 if not os.path.exists(json_save_root):
     os.makedirs(json_save_root, exist_ok=True)
 
-npy_2_jsonl(data_root, img_save_root, jsonl_filename, task_lists)
-cal_stats(jsonl_filename)
-jsonl_2_json(jsonl_filename, json_file)
+task_lists = [
+#   'libero_spatial_no_noops',
+  'libero_goal_no_noops',
+  'libero_object_no_noops',
+  'libero_10_no_noops'
+]
+
+# 遍历每一个 task，分别为它们生成单独的 json 记录
+for task in task_lists:
+    # 动态生成文件名，将 'libero_spatial_no_noops' 替换为当前 task
+    jsonl_filename = f'{json_save_root}/{task}_view2_chunk4_16_stride8_fast1_sparse_fastslow_train.jsonl'
+    json_file = f'{json_save_root}/{task}_view2_chunk4_16_stride8_fast1_sparse_fastslow_train.json'
+    
+    print(f"\n================ Processing Task: {task} ================")
+    
+    # 注意这里将 [task] 作为 task_lists 参数传入，确保 npy_2_jsonl 只处理当前一个 task
+    npy_2_jsonl(data_root, img_save_root, jsonl_filename, [task])
+    
+    # 计算统计信息
+    cal_stats(jsonl_filename)
+    
+    # 转换为标准的 JSON 格式
+    jsonl_2_json(jsonl_filename, json_file)
 

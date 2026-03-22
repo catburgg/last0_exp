@@ -336,7 +336,7 @@ class MultiModalityCausalLM(MultiModalityPreTrainedModel):
 
             cosmos_ckpt_dir = os.environ.get(
                 "COSMOS_TOKENIZER_DIR",
-                "/mnt/wfm/ckpt/ckpt/pretrained/Cosmos-Tokenizer-CI8x8",
+                "/mnt/dataset/share_code/hf_cache/Cosmos-0.1-Tokenizer-CI8x8",
             )
             if load_cosmos_tokenizer:
                 self.cosmos_tokenizer = ImageTokenizer(
