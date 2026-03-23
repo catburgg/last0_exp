@@ -688,7 +688,8 @@ def train(args: argparse.Namespace) -> None:
                 if pad_mask.sum() != compressed_latent_embeds.numel() // compressed_latent_embeds.shape[-1]:
                     logger.warning("Latent pad count mismatch! Falling back to safe replacement.")
 
-                input_latents = compressed_latent_embeds.detach() 
+                # delete .detach()
+                input_latents = compressed_latent_embeds
                 
                 if pad_mask.sum() == input_latents.numel() // input_latents.shape[-1]:
                     inputs_embeds[pad_mask] = input_latents.reshape(-1, input_latents.shape[-1])
@@ -721,22 +722,28 @@ def train(args: argparse.Namespace) -> None:
 
                 inferred_embeddings_all = torch.stack(pred_embeddings_list, dim=0)
 
-                similarity = F.cosine_similarity(
-                    inferred_embeddings_all.to(torch.float32),
-                    compressed_latent_embeds.to(torch.float32), 
-                    dim=-1
-                ).mean()
-                sim_loss = 1.0 - similarity
+                # 修改
+                # similarity = F.cosine_similarity(
+                #     inferred_embeddings_all.to(torch.float32),
+                #     compressed_latent_embeds.to(torch.float32), 
+                #     dim=-1
+                # ).mean()
+                # sim_loss = 1.0 - similarity
 
                 # Detach so recon_loss only trains upsample/decode, not language model
-                inferred_detached = inferred_embeddings_all.detach()
+                # inferred_detached = inferred_embeddings_all.detach()
+                
                 up_dtype = next(model.upsample_conv.parameters()).dtype
-                if up_dtype == torch.float32:
-                    infer_for_recon = inferred_detached.to(torch.float32)
-                else:
-                    infer_for_recon = inferred_detached.to(up_dtype)
+                infer_for_sim = inferred_embeddings_all.to(up_dtype) 
+                
+                # recon的detach也删掉
+                # if up_dtype == torch.float32:
+                #     infer_for_recon = inferred_detached.to(torch.float32)
+                # else:
+                #     infer_for_recon = inferred_detached.to(up_dtype)
+                
                 pred_latent_features = build_pred_latent_features(
-                    infer_for_recon,
+                    infer_for_sim,
                     batch_size=bs,
                     num_frames=num_frames,
                     target_side=target_side,
@@ -744,11 +751,26 @@ def train(args: argparse.Namespace) -> None:
                 )
                 gt_latent_features = gt_latent_features.to(torch.float32)
                 pred_latent_features = pred_latent_features.to(torch.float32)
+                
                 if pred_latent_features.shape != gt_latent_features.shape:
                     raise ValueError(
                         f"Pred/GT latent feature shape mismatch: pred={pred_latent_features.shape}, "
                         f"gt={gt_latent_features.shape}"
                     )
+                
+                # ==========================================================
+                # 2. 计算 sim_loss 
+                # 现在的相似度比较发生在 VAE 特征空间，而不是高度压缩的 hidden 空间。
+                # 为了计算 cosine_similarity，通常我们在特征通道维度 (dim=-1) 或者展平后计算。
+                # 这里将它们展平为 [B, -1] 计算整体的余弦损失。
+                # ==========================================================
+                similarity = F.cosine_similarity(
+                    pred_latent_features.to(torch.float32), 
+                    gt_latent_features.to(torch.float32), 
+                    dim=-1
+                ).mean()
+                sim_loss = 1.0 - similarity
+                
                 if args.recon_mode == "latent":
                     recon_loss = F.mse_loss(pred_latent_features, gt_latent_features)
                 elif args.recon_mode == "pixel":
