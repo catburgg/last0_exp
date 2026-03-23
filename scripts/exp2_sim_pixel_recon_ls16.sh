@@ -2,18 +2,19 @@
 # Exp2: sim loss + pixel recon loss, latent_size=16
 set -e
 
-cd /mnt/nas/zhangxuheng/last0/scripts
-export PYTHONPATH=/mnt/nas/zhangxuheng/last0:/mnt/nas/zhangxuheng/last0/transformers:$PYTHONPATH
+cd /mnt/wfm/code/zxh/last0_exp/scripts
+export PYTHONPATH=/mnt/wfm/code/zxh/last0_exp:/mnt/wfm/code/zxh/last0_exp/transformers:$PYTHONPATH
 export WANDB_MODE=online
 export CUDA_VISIBLE_DEVICES=0,1,2,3,4,5,6,7
 
 BASE_RUN_NAME="sim_pixel_recon_ls16"
 EXPERIMENT_NAME="libero_spatial_ablation"
-OUTPUT_ROOT_DIR="/mnt/data/zhangxuheng/ckpt/exp/"
+OUTPUT_ROOT_DIR="/mnt/wfm/ckpt/ckpt/last0_exp"
 
-DATA_JSON="/mnt/data/zhangxuheng/data/libero_training_data/libero_json/libero_spatial_no_noops_view2_chunk4_16_stride8_fast1_sparse_fastslow_train.json"
-PRETRAIN_PATH="/mnt/data/zhangxuheng/ckpt/pretrained/Janus-Pro-1B"
-PRETRAIN_ACTION_PATH="/mnt/data/zhangxuheng/ckpt/pretrained/LaST0_Pretrain_AE_chunk8/tfmr"
+DATA_JSON="/mnt/wfm/ckpt/data/data_libero/libero_training_data/libero_json/libero_spatial_no_noops_view2_chunk4_16_stride8_fast1_sparse_fastslow_train.json"
+PRETRAIN_PATH="/mnt/wfm/ckpt/ckpt/pretrained/Janus-Pro-1B"
+PRETRAIN_ACTION_PATH="/mnt/wfm/ckpt/ckpt/pretrained/LaST0_Pretrain_AE_chunk8/tfmr"
+COSMOS_TOKENIZER_DIR="/mnt/wfm/ckpt/ckpt/pretrained/Cosmos-Tokenizer-CI8x8"
 
 NUM_PROCESSES=8
 TRAIN_BSZ=2

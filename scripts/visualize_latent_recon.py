@@ -75,7 +75,7 @@ def probe_cosmos_scale_factor(latent_size: int, num_frames: int) -> int:
     target_side = infer_latent_side(latent_size, num_frames)
     cosmos_ckpt_dir = os.environ.get(
         "COSMOS_TOKENIZER_DIR",
-        "/mnt/data/zhangxuheng/ckpt/pretrained/Cosmos-Tokenizer-CI8x8",
+        "/mnt/wfm/ckpt/ckpt/pretrained/Cosmos-Tokenizer-CI8x8",
     )
     tokenizer = ImageTokenizer(
         checkpoint_enc=f"{cosmos_ckpt_dir}/encoder.jit",
@@ -119,6 +119,12 @@ def main():
     parser.add_argument("--action_chunk", type=int, default=8)
     parser.add_argument("--robot_state", action="store_true")
     parser.add_argument("--use_latent", type=int, default=1)
+    parser.add_argument(
+        "--latent_downsample_mode",
+        type=str,
+        default=None,
+        help="single|stacked; omit to use checkpoint config (else default single).",
+    )
     args = parser.parse_args()
 
     os.makedirs(args.output_dir, exist_ok=True)
@@ -128,6 +134,13 @@ def main():
     scale_factor = probe_cosmos_scale_factor(args.latent_size, num_frames)
     processor = VLChatProcessor.from_pretrained(args.checkpoint_path, trust_remote_code=True)
     config = AutoConfig.from_pretrained(args.checkpoint_path, trust_remote_code=True)
+    resolved_downsample_mode = (
+        args.latent_downsample_mode
+        if args.latent_downsample_mode is not None
+        else getattr(config, "latent_downsample_mode", "single")
+    )
+    if resolved_downsample_mode not in ("single", "stacked"):
+        raise ValueError("--latent_downsample_mode must be single or stacked")
     model = AutoModelForCausalLM.from_config(
         config,
         trust_remote_code=True,
@@ -138,6 +151,7 @@ def main():
         use_pointcloud=False,
         use_latent=1,
         cosmos_scale_factor=scale_factor,
+        latent_downsample_mode=resolved_downsample_mode,
     )
     load_result = load_sharded_checkpoint(model, args.checkpoint_path, strict=False, prefer_safe=True)
     if load_result.unexpected_keys:
@@ -219,7 +233,7 @@ def main():
             pred_input_idxs = torch.cat([start_idx, pad_idxs[:-1]]) if len(pad_idxs) > 0 else start_idx
             inferred_embeddings_all = hidden_states[0, pred_input_idxs, :].unsqueeze(0)
 
-            infer_for_recon = inferred_embeddings_all.to(model.upsample_conv.weight.dtype)
+            infer_for_recon = inferred_embeddings_all.to(next(model.upsample_conv.parameters()).dtype)
             pred_latent_features = build_pred_latent_features(
                 infer_for_recon,
                 batch_size=1,

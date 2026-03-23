@@ -1,5 +1,5 @@
 #!/bin/bash
-# Exp1: sim loss + latent recon loss, latent_size=16
+# Exp5: pure latent recon (no sim), latent_size=16, stacked small convs (+SiLU). Baseline: exp4-style + --latent_downsample_mode single
 set -e
 
 cd /mnt/wfm/code/zxh/last0_exp/scripts
@@ -7,7 +7,7 @@ export PYTHONPATH=/mnt/wfm/code/zxh/last0_exp:/mnt/wfm/code/zxh/last0_exp/transf
 export WANDB_MODE=online
 export CUDA_VISIBLE_DEVICES=0,1,2,3,4,5,6,7
 
-BASE_RUN_NAME="sim_latent_recon_ls16"
+BASE_RUN_NAME="pure_latent_recon_ls16_stacked"
 EXPERIMENT_NAME="libero_spatial_ablation"
 OUTPUT_ROOT_DIR="/mnt/wfm/ckpt/ckpt/last0_exp"
 
@@ -45,9 +45,10 @@ accelerate launch --config_file ../config/sft.yaml \
     --load_action_from_pretrain 1 \
     --use_latent 1 \
     --latent_size 16 \
+    --latent_downsample_mode stacked \
     --recon_mode latent \
     --recon_weight 1.0 \
-    --sim_weight 1.0 \
+    --sim_weight 0.0 \
     --run_name ${BASE_RUN_NAME}
 
-echo ">>> Exp1 Finished."
+echo ">>> Exp5 Finished."

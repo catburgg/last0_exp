@@ -17,6 +17,7 @@
 # IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
 # CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
+import math
 import os
 import torch
 from attrdict import AttrDict
@@ -72,6 +73,40 @@ def model_name_to_cls(cls_name):
         raise ValueError(f"class_name {cls_name} is invalid.")
 
     return cls
+
+
+def _build_downsample_stacked(hidden_size: int, n: int) -> nn.Sequential:
+    layers = []
+    for _ in range(n):
+        layers.append(
+            nn.Conv2d(
+                in_channels=hidden_size,
+                out_channels=hidden_size,
+                kernel_size=3,
+                stride=2,
+                padding=1,
+            )
+        )
+        layers.append(nn.SiLU())
+    return nn.Sequential(*layers)
+
+
+def _build_upsample_stacked(hidden_size: int, n: int) -> nn.Sequential:
+    """Each block doubles H,W (ConvTranspose2d k=4,s=2,p=1); apply in order target_side -> ... -> cosmos_side."""
+    layers = []
+    for _ in range(n):
+        layers.append(
+            nn.ConvTranspose2d(
+                in_channels=hidden_size,
+                out_channels=hidden_size,
+                kernel_size=4,
+                stride=2,
+                padding=1,
+                output_padding=0,
+            )
+        )
+        layers.append(nn.SiLU())
+    return nn.Sequential(*layers)
 
 
 class VisionConfig(PretrainedConfig):
@@ -232,10 +267,13 @@ class MultiModalityCausalLM(MultiModalityPreTrainedModel):
                 vision_backend = 'cosmos_vae',
                 cosmos_scale_factor = None,
                 load_cosmos_tokenizer = True,
+                latent_downsample_mode: str = "single",
             ):
         super().__init__(config)
         if cosmos_scale_factor is not None:
             self.config.cosmos_scale_factor = cosmos_scale_factor
+        mode = getattr(self.config, "latent_downsample_mode", latent_downsample_mode)
+        self.config.latent_downsample_mode = mode
         self.flow = flow
         self.use_pointcloud = use_pointcloud
         self.fast_and_slow = fast_and_slow
@@ -298,7 +336,7 @@ class MultiModalityCausalLM(MultiModalityPreTrainedModel):
 
             cosmos_ckpt_dir = os.environ.get(
                 "COSMOS_TOKENIZER_DIR",
-                "/mnt/data/zhangxuheng/ckpt/pretrained/Cosmos-Tokenizer-CI8x8",
+                "/mnt/wfm/ckpt/ckpt/pretrained/Cosmos-Tokenizer-CI8x8",
             )
             if load_cosmos_tokenizer:
                 self.cosmos_tokenizer = ImageTokenizer(
@@ -312,21 +350,34 @@ class MultiModalityCausalLM(MultiModalityPreTrainedModel):
 
             # InternVLA-style gen branch: latent feature -> downsample tokens -> upsample -> latent feature
             self.gen_in_proj = nn.Conv2d(in_channels=vae_dim, out_channels=hidden_size, kernel_size=1, stride=1, padding=0)
-            self.downsample_conv = nn.Conv2d(
-                in_channels=hidden_size,
-                out_channels=hidden_size,
-                kernel_size=sf,
-                stride=sf,
-                padding=0,
-            )
-            self.upsample_conv = nn.ConvTranspose2d(
-                in_channels=hidden_size,
-                out_channels=hidden_size,
-                kernel_size=sf,
-                stride=sf,
-                padding=0,
-                output_padding=0,
-            )
+            if mode == "single":
+                self.downsample_conv = nn.Conv2d(
+                    in_channels=hidden_size,
+                    out_channels=hidden_size,
+                    kernel_size=sf,
+                    stride=sf,
+                    padding=0,
+                )
+                self.upsample_conv = nn.ConvTranspose2d(
+                    in_channels=hidden_size,
+                    out_channels=hidden_size,
+                    kernel_size=sf,
+                    stride=sf,
+                    padding=0,
+                    output_padding=0,
+                )
+            elif mode == "stacked":
+                if sf <= 0 or (sf & (sf - 1)) != 0:
+                    raise ValueError(
+                        f"latent_downsample_mode='stacked' requires cosmos_scale_factor to be a power of 2, got {sf}"
+                    )
+                n = int(math.log2(sf))
+                self.downsample_conv = _build_downsample_stacked(hidden_size, n)
+                self.upsample_conv = _build_upsample_stacked(hidden_size, n)
+            else:
+                raise ValueError(
+                    f"latent_downsample_mode must be 'single' or 'stacked', got {mode!r}"
+                )
             self.gen_out_layer_norm = nn.LayerNorm(hidden_size)
             self.gen_out_proj = nn.Linear(hidden_size, vae_dim)
 

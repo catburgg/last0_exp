@@ -1,22 +1,28 @@
 #!/bin/bash
-# Exp5: pure latent recon loss (no sim), latent_size=4
+# Exp4: pure latent recon loss (no sim), latent_size=16
 set -e
 
-cd /mnt/nas/zhangxuheng/last0/scripts
-export PYTHONPATH=/mnt/nas/zhangxuheng/last0:/mnt/nas/zhangxuheng/last0/transformers:$PYTHONPATH
+nvidia-smi
+
+export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
+
+cd /mnt/wfm/code/zxh/last0_exp/scripts
+export PYTHONPATH=/mnt/wfm/code/zxh/last0_exp:/mnt/wfm/code/zxh/last0_exp/transformers:$PYTHONPATH
 export WANDB_MODE=online
 export CUDA_VISIBLE_DEVICES=0,1,2,3,4,5,6,7
 
-BASE_RUN_NAME="pure_latent_recon_ls4"
+BASE_RUN_NAME="pure_latent_recon_ls16"
+# BASE_RUN_NAME="test"
 EXPERIMENT_NAME="libero_spatial_ablation"
-OUTPUT_ROOT_DIR="/mnt/data/zhangxuheng/ckpt/exp/"
+OUTPUT_ROOT_DIR="/mnt/wfm/ckpt/ckpt/last0_exp"
 
-DATA_JSON="/mnt/data/zhangxuheng/data/libero_training_data/libero_json/libero_spatial_no_noops_view2_chunk4_16_stride8_fast1_sparse_fastslow_train.json"
-PRETRAIN_PATH="/mnt/data/zhangxuheng/ckpt/pretrained/Janus-Pro-1B"
-PRETRAIN_ACTION_PATH="/mnt/data/zhangxuheng/ckpt/pretrained/LaST0_Pretrain_AE_chunk8/tfmr"
+DATA_JSON="/mnt/wfm/ckpt/data/data_libero/libero_training_data/libero_json/libero_spatial_no_noops_view2_chunk4_16_stride8_fast1_sparse_fastslow_train.json"
+PRETRAIN_PATH="/mnt/wfm/ckpt/ckpt/pretrained/Janus-Pro-1B"
+PRETRAIN_ACTION_PATH="/mnt/wfm/ckpt/ckpt/pretrained/LaST0_Pretrain_AE_chunk8/tfmr"
+COSMOS_TOKENIZER_DIR="/mnt/wfm/ckpt/ckpt/pretrained/Cosmos-Tokenizer-CI8x8"
 
 NUM_PROCESSES=8
-TRAIN_BSZ=4
+TRAIN_BSZ=2
 LR=1e-4
 
 accelerate launch --config_file ../config/sft.yaml \
@@ -36,17 +42,17 @@ accelerate launch --config_file ../config/sft.yaml \
     --learning_rate ${LR} \
     --min_lr_ratio 0 \
     --weight_decay 0 \
-    --gradient_accumulation_steps 2 \
+    --gradient_accumulation_steps 4 \
     --output_dir ${OUTPUT_ROOT_DIR} \
     --log_dir ${OUTPUT_ROOT_DIR} \
     --experiment_name ${EXPERIMENT_NAME} \
     --load_action_from_latent 0 \
     --load_action_from_pretrain 1 \
     --use_latent 1 \
-    --latent_size 4 \
+    --latent_size 16 \
     --recon_mode latent \
     --recon_weight 1.0 \
     --sim_weight 0.0 \
     --run_name ${BASE_RUN_NAME}
 
-echo ">>> Exp5 Finished."
+echo ">>> Exp4 Finished."

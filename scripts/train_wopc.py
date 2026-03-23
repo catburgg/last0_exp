@@ -449,7 +449,7 @@ def train(args: argparse.Namespace) -> None:
 
         cosmos_ckpt_dir = os.environ.get(
             "COSMOS_TOKENIZER_DIR",
-            "/mnt/data/zhangxuheng/ckpt/pretrained/Cosmos-Tokenizer-CI8x8",
+            "/mnt/wfm/ckpt/ckpt/pretrained/Cosmos-Tokenizer-CI8x8",
         )
         probe_tokenizer = ImageTokenizer(
             checkpoint_enc=f"{cosmos_ckpt_dir}/encoder.jit",
@@ -478,12 +478,14 @@ def train(args: argparse.Namespace) -> None:
         use_latent=args.use_latent,
         vision_backend=args.vision_backend,
         cosmos_scale_factor=cosmos_scale_factor,
+        latent_downsample_mode=args.latent_downsample_mode,
         ignore_mismatched_sizes=True,
     )
     if args.vision_backend == 'cosmos_vae':
         accelerator.print(
             f"latent_size={args.latent_size}, target_side={target_side_for_scale}, "
-            f"cosmos_scale_factor={cosmos_scale_factor}"
+            f"cosmos_scale_factor={cosmos_scale_factor}, "
+            f"latent_downsample_mode={args.latent_downsample_mode}"
         )
         # Re-init newly introduced modules that are not in pretrained checkpoint.
         for mname, m in model.named_modules():
@@ -522,6 +524,7 @@ def train(args: argparse.Namespace) -> None:
         use_latent=args.use_latent,
         vision_backend=args.vision_backend,
         cosmos_scale_factor=cosmos_scale_factor,
+        latent_downsample_mode=args.latent_downsample_mode,
         ignore_mismatched_sizes=True,
     )
 
@@ -727,10 +730,11 @@ def train(args: argparse.Namespace) -> None:
 
                 # Detach so recon_loss only trains upsample/decode, not language model
                 inferred_detached = inferred_embeddings_all.detach()
-                if model.upsample_conv.weight.dtype == torch.float32:
+                up_dtype = next(model.upsample_conv.parameters()).dtype
+                if up_dtype == torch.float32:
                     infer_for_recon = inferred_detached.to(torch.float32)
                 else:
-                    infer_for_recon = inferred_detached.to(model.upsample_conv.weight.dtype)
+                    infer_for_recon = inferred_detached.to(up_dtype)
                 pred_latent_features = build_pred_latent_features(
                     infer_for_recon,
                     batch_size=bs,
@@ -883,6 +887,13 @@ if __name__ == '__main__':
     parser.add_argument('--use_latent', type=int, default=1)
     parser.add_argument('--latent_size', type=int, default=4)
     parser.add_argument('--vision_backend', type=str, default='cosmos_vae', choices=['cosmos_vae', 'siglip'])
+    parser.add_argument(
+        '--latent_downsample_mode',
+        type=str,
+        default='single',
+        choices=['single', 'stacked'],
+        help="Cosmos latent spatial pool: single large conv vs stacked 3x3 stride-2 (+SiLU) with matching transpose stack",
+    )
     parser.add_argument('--recon_mode', type=str, default='latent', choices=['latent', 'pixel'])
     parser.add_argument('--recon_weight', type=float, default=1.0)
     parser.add_argument('--sim_weight', type=float, default=1.0)
