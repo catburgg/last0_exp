@@ -385,6 +385,7 @@ class MultiModalityCausalLM(MultiModalityPreTrainedModel):
             from janus.models.cosmos_tokenizer.dit_lib import (
                 CosmosDiTEarlyExit,
                 DitPatchVectorizerAttn,
+                DitPatchVectorizerAvgPool,
                 DitPatchVectorizerConv,
                 HIDDEN_DIM as DIT_DIM,
             )
@@ -405,6 +406,8 @@ class MultiModalityCausalLM(MultiModalityPreTrainedModel):
             self.cosmos_dit = CosmosDiTEarlyExit(ckpt_path=dit_ckpt, num_exit_blocks=10)
             if dit_align_mode == "attn":
                 self.dit_patch_vectorizer = DitPatchVectorizerAttn()
+            elif dit_align_mode == "avg":
+                self.dit_patch_vectorizer = DitPatchVectorizerAvgPool()
             else:
                 self.dit_patch_vectorizer = DitPatchVectorizerConv()
             self.dit_gt_to_llm = nn.Linear(DIT_DIM, hidden_size)

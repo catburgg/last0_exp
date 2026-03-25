@@ -452,6 +452,13 @@ class DitPatchVectorizerAttn(nn.Module):
         return out.squeeze(1)
 
 
+class DitPatchVectorizerAvgPool(nn.Module):
+    """(B, Hp, Wp, D) → (B, D) via mean over spatial dims (global average pooling)."""
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        return x.mean(dim=(1, 2))
+
+
 # ---------------------------------------------------------------------------
 # Pipeline utilities
 # ---------------------------------------------------------------------------

@@ -600,6 +600,7 @@ def train(args: argparse.Namespace) -> None:
 
         from janus.models.cosmos_tokenizer.dit_lib import (
             DitPatchVectorizerAttn,
+            DitPatchVectorizerAvgPool,
             DitPatchVectorizerConv,
             HIDDEN_DIM as DIT_DIM,
         )
@@ -607,6 +608,8 @@ def train(args: argparse.Namespace) -> None:
         hs = model.language_model.config.hidden_size
         if args.dit_align_mode == "attn":
             model.dit_patch_vectorizer = DitPatchVectorizerAttn().to(dtype=torch.bfloat16)
+        elif args.dit_align_mode == "avg":
+            model.dit_patch_vectorizer = DitPatchVectorizerAvgPool().to(dtype=torch.bfloat16)
         else:
             model.dit_patch_vectorizer = DitPatchVectorizerConv().to(dtype=torch.bfloat16)
         model.dit_gt_to_llm = nn.Linear(DIT_DIM, hs).to(dtype=torch.bfloat16)
@@ -731,7 +734,8 @@ def train(args: argparse.Namespace) -> None:
                 mu = latent_full[:, :8]
                 dit_wdtype = next(model.cosmos_dit.parameters()).dtype
                 spatial = model.cosmos_dit.forward_spatial(mu.to(dit_wdtype), 0).squeeze(1)
-                agg_dtype = next(model.dit_patch_vectorizer.parameters()).dtype
+                _p = next(model.dit_patch_vectorizer.parameters(), None)
+                agg_dtype = _p.dtype if _p is not None else spatial.dtype
                 dit_vec_bn = model.dit_patch_vectorizer(spatial.to(agg_dtype))
                 compressed_latent_embeds = model.dit_gt_to_llm(dit_vec_bn).view(bs, num_frames, -1)
 
@@ -1029,8 +1033,8 @@ if __name__ == '__main__':
         '--dit_align_mode',
         type=str,
         default='conv',
-        choices=['conv', 'attn'],
-        help='wan_dit only: aggregate DiT patch grid to one 2048-d vector per frame',
+        choices=['conv', 'attn', 'avg'],
+        help='wan_dit only: aggregate DiT patch grid (B,H,W,D) to (B,D); avg = global mean over H,W',
     )
     parser.add_argument('--latent_downsample_mode', type=str, default='single', choices=['single', 'stacked'])
     parser.add_argument('--recon_mode', type=str, default='latent', choices=['latent', 'pixel'])
