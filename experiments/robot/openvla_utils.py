@@ -285,7 +285,7 @@ def get_vla(cfg: Any) -> torch.nn.Module:
         torch_dtype=torch.bfloat16,
         load_in_8bit=cfg.load_in_8bit,
         load_in_4bit=cfg.load_in_4bit,
-        low_cpu_mem_usage=True,
+        low_cpu_mem_usage=False,
         trust_remote_code=True,
     )
 

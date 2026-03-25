@@ -7,7 +7,7 @@ nvidia-smi
 export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
 
 cd /mnt/wfm/code/zxh/last0_exp/scripts
-export PYTHONPATH=/mnt/wfm/code/zxh/last0_exp:/mnt/wfm/code/zxh/last0_exp/transformers:$PYTHONPATH
+export PYTHONPATH=/mnt/wfm/code/zxh/last0_exp:$PYTHONPATH
 export WANDB_MODE=online
 export CUDA_VISIBLE_DEVICES=0,1,2,3,4,5,6,7
 
@@ -35,7 +35,7 @@ accelerate launch --config_file ../config/sft.yaml \
     --data_path ${DATA_JSON} \
     --data_root "" \
     --n_epochs 100 \
-    --save_freq 5 \
+    --save_freq 10 \
     --action_dim 7 \
     --action_chunk 8 \
     --train_bsz_per_gpu ${TRAIN_BSZ} \

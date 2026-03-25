@@ -510,7 +510,8 @@ def train(args: argparse.Namespace) -> None:
             ], dim=1)
 
             fast_img_len = batch['fast_img_len']
-            action_len = 1 + 578 * fast_img_len + 1 + args.action_chunk
+            noise_len = batch["noisy_actions"].shape[1]
+            action_len = 578 * fast_img_len + 1 + noise_len
             latent_indexes, action_indexes = create_component_indexes(inputs_embeds.shape[1], action_len) 
             
             if args.use_latent:

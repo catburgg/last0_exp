@@ -268,6 +268,11 @@ class MultiModalityCausalLM(MultiModalityPreTrainedModel):
                 cosmos_scale_factor = None,
                 load_cosmos_tokenizer = True,
                 latent_downsample_mode: str = "single",
+                use_cosmos_dit: bool = False,
+                cosmos_dit_path: str = None,
+                wan_vae_path: str = None,
+                dit_align_mode: str = "conv",
+                **kwargs,
             ):
         super().__init__(config)
         if cosmos_scale_factor is not None:
@@ -331,14 +336,12 @@ class MultiModalityCausalLM(MultiModalityPreTrainedModel):
             hidden_size = language_config.hidden_size
             vae_dim = 16
             sf = int(getattr(self.config, "cosmos_scale_factor", 8))
-            if sf <= 0:
-                raise ValueError(f"cosmos_scale_factor must be positive, got {sf}")
 
-            cosmos_ckpt_dir = os.environ.get(
-                "COSMOS_TOKENIZER_DIR",
-                "/mnt/dataset/share_code/hf_cache/Cosmos-0.1-Tokenizer-CI8x8",
-            )
             if load_cosmos_tokenizer:
+                cosmos_ckpt_dir = os.environ.get(
+                    "COSMOS_TOKENIZER_DIR",
+                    "/mnt/dataset/share_code/hf_cache/Cosmos-0.1-Tokenizer-CI8x8",
+                )
                 self.cosmos_tokenizer = ImageTokenizer(
                     checkpoint_enc=f"{cosmos_ckpt_dir}/encoder.jit",
                     checkpoint_dec=f"{cosmos_ckpt_dir}/decoder.jit",
@@ -348,7 +351,6 @@ class MultiModalityCausalLM(MultiModalityPreTrainedModel):
             else:
                 self.cosmos_tokenizer = None
 
-            # InternVLA-style gen branch: latent feature -> downsample tokens -> upsample -> latent feature
             self.gen_in_proj = nn.Conv2d(in_channels=vae_dim, out_channels=hidden_size, kernel_size=1, stride=1, padding=0)
             if mode == "single":
                 self.downsample_conv = nn.Conv2d(
@@ -366,27 +368,47 @@ class MultiModalityCausalLM(MultiModalityPreTrainedModel):
                     padding=0,
                     output_padding=0,
                 )
-            elif mode == "stacked":
-                if sf <= 0 or (sf & (sf - 1)) != 0:
-                    raise ValueError(
-                        f"latent_downsample_mode='stacked' requires cosmos_scale_factor to be a power of 2, got {sf}"
-                    )
+            else:
                 n = int(math.log2(sf))
                 self.downsample_conv = _build_downsample_stacked(hidden_size, n)
                 self.upsample_conv = _build_upsample_stacked(hidden_size, n)
-            else:
-                raise ValueError(
-                    f"latent_downsample_mode must be 'single' or 'stacked', got {mode!r}"
-                )
             self.gen_out_layer_norm = nn.LayerNorm(hidden_size)
             self.gen_out_proj = nn.Linear(hidden_size, vae_dim)
 
-            # Backward-compatible aliases used by existing scripts.
             self.cosmos_in_proj = self.gen_in_proj
             self.latent_compressor = self.downsample_conv
             self.latent_decompressor = self.upsample_conv
             self.latent_recon_norm = self.gen_out_layer_norm
             self.cosmos_out_proj = self.gen_out_proj
+
+        elif vision_backend == "wan_dit":
+            from janus.models.cosmos_tokenizer.dit_lib import (
+                CosmosDiTEarlyExit,
+                DitPatchVectorizerAttn,
+                DitPatchVectorizerConv,
+                HIDDEN_DIM as DIT_DIM,
+            )
+            from janus.models.cosmos_tokenizer.wan_vae_lib import WanVAEEncoder
+
+            hidden_size = language_config.hidden_size
+            wan_ckpt = wan_vae_path or os.environ.get(
+                "WAN_VAE_PATH",
+                "/mnt/wfm/ckpt/ckpt/pretrained/Cosmos-Predict2.5-2B/tokenizer.pth",
+            )
+            dit_ckpt = cosmos_dit_path or os.environ.get(
+                "COSMOS_DIT_PATH",
+                "/mnt/wfm/ckpt/ckpt/pretrained/Cosmos-Predict2.5-2B/"
+                "robot/policy/libero/model.pt",
+            )
+            self.cosmos_tokenizer = None
+            self.wan_vae = WanVAEEncoder(ckpt_path=wan_ckpt)
+            self.cosmos_dit = CosmosDiTEarlyExit(ckpt_path=dit_ckpt, num_exit_blocks=10)
+            if dit_align_mode == "attn":
+                self.dit_patch_vectorizer = DitPatchVectorizerAttn()
+            else:
+                self.dit_patch_vectorizer = DitPatchVectorizerConv()
+            self.dit_gt_to_llm = nn.Linear(DIT_DIM, hidden_size)
+            self.dit_out_proj = nn.Linear(hidden_size, DIT_DIM)
 
         if self.use_latent and self.use_pointcloud:
             print("Using pointcloud embedder") 
@@ -470,7 +492,7 @@ class MultiModalityCausalLM(MultiModalityPreTrainedModel):
                 latent_indexes=torch.arange(0, inputs_embeds.shape[1]-3).to(inputs_embeds.device)
                 action_indexes=torch.arange(inputs_embeds.shape[1]-3, inputs_embeds.shape[1]).to(inputs_embeds.device)
             else:
-                action_len = 1 + 578 * self.fast_image_num + 1 + self.action_chunk
+                action_len = 578 * self.fast_image_num + 1 + self.action_chunk
                 latent_indexes=torch.arange(0, inputs_embeds.shape[1] - action_len).to(inputs_embeds.device)
                 action_indexes=torch.arange(inputs_embeds.shape[1] - action_len, inputs_embeds.shape[1]).to(inputs_embeds.device)
         else:

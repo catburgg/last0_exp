@@ -3,7 +3,7 @@
 set -e
 
 cd /mnt/wfm/code/zxh/last0_exp/scripts
-export PYTHONPATH=/mnt/wfm/code/zxh/last0_exp:/mnt/wfm/code/zxh/last0_exp/transformers:$PYTHONPATH
+export PYTHONPATH=/mnt/wfm/code/zxh/last0_exp:$PYTHONPATH
 export WANDB_MODE=online
 export CUDA_VISIBLE_DEVICES=0,1,2,3,4,5,6,7
 

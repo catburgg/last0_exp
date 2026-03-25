@@ -2,23 +2,21 @@ import argparse
 import os
 import math
 import sys
+
+# Put repo root on path so `import transformers` resolves to last0_exp/transformers/ (vendored fork).
+# Do not add .../last0_exp/transformers alone: deepspeed.py there would shadow the DeepSpeed library.
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+REPO_ROOT = os.path.dirname(SCRIPT_DIR)
+for _p in (REPO_ROOT, SCRIPT_DIR):
+    if _p not in sys.path:
+        sys.path.insert(0, _p)
+
 import torch
 import torch.nn.functional as F
 import torchvision.utils as vutils
 from einops import rearrange
 from transformers import AutoConfig, AutoModelForCausalLM
 from transformers.modeling_utils import load_sharded_checkpoint
-
-# Make script runnable without externally setting PYTHONPATH.
-SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
-REPO_ROOT = os.path.dirname(SCRIPT_DIR)
-TRANSFORMERS_ROOT = os.path.join(REPO_ROOT, "transformers")
-if SCRIPT_DIR not in sys.path:
-    sys.path.insert(0, SCRIPT_DIR)
-if REPO_ROOT not in sys.path:
-    sys.path.insert(0, REPO_ROOT)
-if TRANSFORMERS_ROOT not in sys.path:
-    sys.path.insert(0, TRANSFORMERS_ROOT)
 
 from train_wopc import SftDataset, create_component_indexes
 from janus.models import VLChatProcessor
@@ -192,7 +190,8 @@ def main():
             )
 
             fast_img_len = batch["fast_img_len"]
-            action_len = 1 + 578 * fast_img_len + 1 + args.action_chunk
+            noise_len = batch["noisy_actions"].shape[1]
+            action_len = 578 * fast_img_len + 1 + noise_len
             latent_indexes, action_indexes = create_component_indexes(inputs_embeds.shape[1], action_len)
 
             helper_images = rearrange(batch["latent_pixel_values"], "b n c h w -> (b n) c h w")

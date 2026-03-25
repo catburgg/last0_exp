@@ -3,7 +3,7 @@
 set -e
 
 cd /mnt/dataset/share_code/code/last0_exp/scripts
-export PYTHONPATH=/mnt/dataset/share_code/code/last0_exp:/mnt/dataset/share_code/code/last0_exp/transformers:$PYTHONPATH
+export PYTHONPATH=/mnt/dataset/share_code/code/last0_exp:$PYTHONPATH
 export WANDB_MODE=offline
 export CUDA_VISIBLE_DEVICES=0,1
 

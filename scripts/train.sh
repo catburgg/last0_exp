@@ -3,7 +3,7 @@
 set -e
 
 cd /path/to/last0
-export PYTHONPATH=/path/to/last0:/path/to/last0/transformers:$PYTHONPATH
+export PYTHONPATH=/path/to/last0:$PYTHONPATH
 export WANDB_MODE=online
 export CUDA_VISIBLE_DEVICES=0,1,2,3,4,5,6,7
 

@@ -1,8 +1,12 @@
 
-cd /mnt/nas/zhangxuheng/last0
-export PYTHONPATH=/mnt/nas/zhangxuheng/LIBERO:$PYTHONPATH
-export PYTHONPATH=/mnt/nas/zhangxuheng:/mnt/nas/zhangxuheng/last0/transformers:$PYTHONPATH
+cd /mnt/wfm/code/zxh/last0_exp
+export PYTHONPATH=/mnt/wfm/code/zxh/LIBERO:$PYTHONPATH
+export PYTHONPATH=/mnt/wfm/code/zxh/last0_exp:/mnt/wfm/code/zxh:$PYTHONPATH
 export TOKENIZERS_PARALLELISM=false
+
+source /mnt/wfm/ckpt/env/last0/source_cuda_ld_path.sh
+export PATH="/mnt/wfm/ckpt/env/last0/bin:$PATH"
+export CUDA_VISIBLE_DEVICES=1
 
 # EGL headless rendering setup (required in containerized environments)
 export MUJOCO_GL=egl
@@ -12,11 +16,11 @@ echo '{"file_format_version":"1.0.0","ICD":{"library_path":"libEGL_nvidia.so.0"}
 
 # Launch LIBERO evals
 python experiments/robot/libero/run_libero_eval.py \
-  --pretrained_checkpoint /mnt/data/zhangxuheng/ckpt/exp/libero_spatial_ablation/pure_pixel_recon_ls16/checkpoint-24-82775/tfmr \
+  --pretrained_checkpoint /mnt/wfm/ckpt/ckpt/last0_exp/libero_spatial_ablation/pure_latent_recon_ls4_stacked/checkpoint-19-66220/tfmr \
   --task_suite_name libero_spatial \
   --cuda "0" \
   --vision_backend cosmos_vae \
-  --latent_size 16 \
+  --latent_size 4 \
   --num_open_loop_steps 8 \
   --save_videos False \
   --seed 0

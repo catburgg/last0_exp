@@ -15,8 +15,13 @@ from experiments.robot.robot_utils import (
 )
 
 
-def get_libero_env(task, model_family, resolution=256, seed=0):
-    """Initializes and returns the LIBERO environment, along with the task description."""
+def get_libero_env(task, model_family, resolution=256, seed=0, use_wrist_camera=True):
+    """Initializes and returns the LIBERO environment, along with the task description.
+
+    use_wrist_camera is kept for API compatibility with run_libero_eval (model uses it via
+    fast_image_num); the sim still exposes wrist images when the scene includes that camera.
+    """
+    del use_wrist_camera
     task_description = task.language
     task_bddl_file = os.path.join(get_libero_path("bddl_files"), task.problem_folder, task.bddl_file)
     env_args = {"bddl_file_name": task_bddl_file, "camera_heights": resolution, "camera_widths": resolution}

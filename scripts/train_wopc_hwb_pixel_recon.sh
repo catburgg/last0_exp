@@ -5,7 +5,7 @@ set -e
 cd /mnt/dataset/share_code/code/last0_exp/scripts
 source /root/miniforge3/bin/activate /mnt/dataset/share_code/conda_envs/last05_hwb
 
-export PYTHONPATH=/mnt/dataset/share_code/code/last0_exp:/mnt/dataset/share_code/code/last0_exp/transformers:$PYTHONPATH
+export PYTHONPATH=/mnt/dataset/share_code/code/last0_exp:$PYTHONPATH
 export WANDB_MODE=online
 export CUDA_VISIBLE_DEVICES=0,1,2,3,4,5,6,7
 # export CUDA_VISIBLE_DEVICES=0,1
