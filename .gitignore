@@ -1,8 +1,6 @@
 training_data
 
-scripts/exp*.sh
-exp
-exp_pretrain
+scripts/exp*
 experiments/logs
 LIBERO
 vis_results
