@@ -75,38 +75,108 @@ def model_name_to_cls(cls_name):
     return cls
 
 
-def _build_downsample_stacked(hidden_size: int, n: int) -> nn.Sequential:
-    layers = []
-    for _ in range(n):
-        layers.append(
-            nn.Conv2d(
-                in_channels=hidden_size,
-                out_channels=hidden_size,
-                kernel_size=3,
-                stride=2,
-                padding=1,
-            )
+class LatentDownsampleCrossAttn(nn.Module):
+    """
+    Compresses a VAE latent map (B*N, C, H, W) into 1 token per frame (B*N, 1, hidden_size).
+
+    Pipeline:
+      1. Reshape gt_latent to (B*N, C, H*W) — C key/value tokens of dim kv_dim=H*W
+      2. pre_mlp  : 2-layer MLP applied to each kv token  (kv_dim → kv_dim)
+      3. cross_attn: learnable query (1, kv_dim) attends to the C processed kv tokens
+      4. post_act + post_mlp: GELU + 2-layer MLP  (kv_dim → hidden_size)
+
+    Dimensions (default Cosmos CI8x8 + 256x256):
+        vae_channels=16, vae_spatial=32  →  kv_dim=1024, hidden_size=2048
+    """
+    def __init__(
+        self,
+        vae_channels: int,
+        vae_spatial: int,
+        hidden_size: int,
+        num_heads: int = 8,
+    ):
+        super().__init__()
+        kv_dim = vae_spatial * vae_spatial          # 32*32 = 1024
+        self.query_token = nn.Parameter(torch.zeros(1, 1, kv_dim))
+        self.pre_mlp = nn.Sequential(
+            nn.Linear(kv_dim, kv_dim),
+            nn.GELU(),
+            nn.Linear(kv_dim, kv_dim),
         )
-        layers.append(nn.SiLU())
-    return nn.Sequential(*layers)
+        self.cross_attn = nn.MultiheadAttention(
+            embed_dim=kv_dim, num_heads=num_heads, batch_first=True
+        )
+        self.post_act = nn.GELU()
+        self.post_mlp = nn.Sequential(
+            nn.Linear(kv_dim, kv_dim),
+            nn.GELU(),
+            nn.Linear(kv_dim, hidden_size),
+        )
+
+    def forward(self, gt_latent: torch.Tensor) -> torch.Tensor:
+        # gt_latent: (B*N, C, H, W)
+        bn, c, h, w = gt_latent.shape
+        kv = gt_latent.reshape(bn, c, h * w)              # (B*N, C, kv_dim)
+        kv = self.pre_mlp(kv)                             # (B*N, C, kv_dim)
+        q = self.query_token.expand(bn, -1, -1)           # (B*N, 1, kv_dim)
+        out, _ = self.cross_attn(q, kv, kv)               # (B*N, 1, kv_dim)
+        out = self.post_act(out)
+        out = self.post_mlp(out)                           # (B*N, 1, hidden_size)
+        return out
 
 
-def _build_upsample_stacked(hidden_size: int, n: int) -> nn.Sequential:
-    """Each block doubles H,W (ConvTranspose2d k=4,s=2,p=1); apply in order target_side -> ... -> cosmos_side."""
-    layers = []
-    for _ in range(n):
-        layers.append(
-            nn.ConvTranspose2d(
-                in_channels=hidden_size,
-                out_channels=hidden_size,
-                kernel_size=4,
-                stride=2,
-                padding=1,
-                output_padding=0,
-            )
+class LatentUpsampleCrossAttn(nn.Module):
+    """
+    Decodes 1 latent token per frame (B*N, 1, hidden_size) back to a VAE latent map
+    (B*N, C, H, W).
+
+    Pipeline:
+      1. pre_mlp  : 2-layer MLP applied to the latent token  (hidden_size → hidden_size)
+      2. cross_attn: C learnable query tokens (C, hidden_size) attend to the processed token
+      3. post_act + post_mlp: GELU + 2-layer MLP  (hidden_size → H*W)
+      4. Reshape to (B*N, C, H, W)
+
+    Dimensions (default Cosmos CI8x8 + 256x256):
+        vae_channels=16, vae_spatial=32  →  out_dim=1024, hidden_size=2048
+    """
+    def __init__(
+        self,
+        hidden_size: int,
+        vae_channels: int,
+        vae_spatial: int,
+        num_heads: int = 16,
+    ):
+        super().__init__()
+        n_q = vae_channels                              # 16
+        out_dim = vae_spatial * vae_spatial             # 32*32 = 1024
+        self.query_tokens = nn.Parameter(torch.zeros(1, n_q, hidden_size))
+        self.pre_mlp = nn.Sequential(
+            nn.Linear(hidden_size, hidden_size),
+            nn.GELU(),
+            nn.Linear(hidden_size, hidden_size),
         )
-        layers.append(nn.SiLU())
-    return nn.Sequential(*layers)
+        self.cross_attn = nn.MultiheadAttention(
+            embed_dim=hidden_size, num_heads=num_heads, batch_first=True
+        )
+        self.post_act = nn.GELU()
+        self.post_mlp = nn.Sequential(
+            nn.Linear(hidden_size, hidden_size),
+            nn.GELU(),
+            nn.Linear(hidden_size, out_dim),
+        )
+        self.n_q = n_q
+        self.vae_spatial = vae_spatial
+
+    def forward(self, latent_token: torch.Tensor) -> torch.Tensor:
+        # latent_token: (B*N, 1, hidden_size)
+        bn = latent_token.shape[0]
+        kv = self.pre_mlp(latent_token)                              # (B*N, 1, hidden_size)
+        q = self.query_tokens.expand(bn, -1, -1)                    # (B*N, n_q, hidden_size)
+        out, _ = self.cross_attn(q, kv, kv)                         # (B*N, n_q, hidden_size)
+        out = self.post_act(out)
+        out = self.post_mlp(out)                                     # (B*N, n_q, out_dim)
+        out = out.reshape(bn, self.n_q, self.vae_spatial, self.vae_spatial)
+        return out                                                   # (B*N, C, H, W)
 
 
 class VisionConfig(PretrainedConfig):
@@ -265,15 +335,14 @@ class MultiModalityCausalLM(MultiModalityPreTrainedModel):
                 fast_and_slow = False,
                 fast_image_num = 1,
                 vision_backend = 'cosmos_vae',
-                cosmos_scale_factor = None,
+                cosmos_scale_factor = None,   # kept for backward compat, unused
+                cosmos_side = None,           # spatial side of Cosmos VAE output (e.g. 32 for CI8x8 + 256x256)
                 load_cosmos_tokenizer = True,
-                latent_downsample_mode: str = "single",
+                latent_downsample_mode: str = "cross_attn",  # kept for compat, always cross_attn
             ):
         super().__init__(config)
-        if cosmos_scale_factor is not None:
-            self.config.cosmos_scale_factor = cosmos_scale_factor
-        mode = getattr(self.config, "latent_downsample_mode", latent_downsample_mode)
-        self.config.latent_downsample_mode = mode
+        if cosmos_side is not None:
+            self.config.cosmos_side = cosmos_side
         self.flow = flow
         self.use_pointcloud = use_pointcloud
         self.fast_and_slow = fast_and_slow
@@ -330,13 +399,13 @@ class MultiModalityCausalLM(MultiModalityPreTrainedModel):
 
             hidden_size = language_config.hidden_size
             vae_dim = 16
-            sf = int(getattr(self.config, "cosmos_scale_factor", 8))
-            if sf <= 0:
-                raise ValueError(f"cosmos_scale_factor must be positive, got {sf}")
+            # Spatial side of the Cosmos VAE latent (32 for CI8x8 tokenizer + 256x256 input).
+            _cosmos_side = int(getattr(self.config, "cosmos_side", 32))
+            self.config.cosmos_side = _cosmos_side
 
             cosmos_ckpt_dir = os.environ.get(
                 "COSMOS_TOKENIZER_DIR",
-                "/mnt/dataset/share_code/hf_cache/Cosmos-0.1-Tokenizer-CI8x8",
+                "/mnt/dataset/share/hwb/hf_cache/Cosmos-0.1-Tokenizer-CI8x8",
             )
             if load_cosmos_tokenizer:
                 self.cosmos_tokenizer = ImageTokenizer(
@@ -348,45 +417,19 @@ class MultiModalityCausalLM(MultiModalityPreTrainedModel):
             else:
                 self.cosmos_tokenizer = None
 
-            # InternVLA-style gen branch: latent feature -> downsample tokens -> upsample -> latent feature
-            self.gen_in_proj = nn.Conv2d(in_channels=vae_dim, out_channels=hidden_size, kernel_size=1, stride=1, padding=0)
-            if mode == "single":
-                self.downsample_conv = nn.Conv2d(
-                    in_channels=hidden_size,
-                    out_channels=hidden_size,
-                    kernel_size=sf,
-                    stride=sf,
-                    padding=0,
-                )
-                self.upsample_conv = nn.ConvTranspose2d(
-                    in_channels=hidden_size,
-                    out_channels=hidden_size,
-                    kernel_size=sf,
-                    stride=sf,
-                    padding=0,
-                    output_padding=0,
-                )
-            elif mode == "stacked":
-                if sf <= 0 or (sf & (sf - 1)) != 0:
-                    raise ValueError(
-                        f"latent_downsample_mode='stacked' requires cosmos_scale_factor to be a power of 2, got {sf}"
-                    )
-                n = int(math.log2(sf))
-                self.downsample_conv = _build_downsample_stacked(hidden_size, n)
-                self.upsample_conv = _build_upsample_stacked(hidden_size, n)
-            else:
-                raise ValueError(
-                    f"latent_downsample_mode must be 'single' or 'stacked', got {mode!r}"
-                )
-            self.gen_out_layer_norm = nn.LayerNorm(hidden_size)
-            self.gen_out_proj = nn.Linear(hidden_size, vae_dim)
-
-            # Backward-compatible aliases used by existing scripts.
-            self.cosmos_in_proj = self.gen_in_proj
-            self.latent_compressor = self.downsample_conv
-            self.latent_decompressor = self.upsample_conv
-            self.latent_recon_norm = self.gen_out_layer_norm
-            self.cosmos_out_proj = self.gen_out_proj
+            # Cross-attention based compress / decompress:
+            #   latent_compressor : (B*N, C, H, W) -> (B*N, 1, hidden_size)
+            #   latent_decompressor: (B*N, 1, hidden_size) -> (B*N, C, H, W)
+            self.latent_compressor = LatentDownsampleCrossAttn(
+                vae_channels=vae_dim,
+                vae_spatial=_cosmos_side,
+                hidden_size=hidden_size,
+            )
+            self.latent_decompressor = LatentUpsampleCrossAttn(
+                hidden_size=hidden_size,
+                vae_channels=vae_dim,
+                vae_spatial=_cosmos_side,
+            )
 
         if self.use_latent and self.use_pointcloud:
             print("Using pointcloud embedder") 

@@ -105,23 +105,15 @@ def build_pred_latent_features(
     inferred_embeddings_all: torch.Tensor,
     batch_size: int,
     num_frames: int,
-    target_side: int,
     model,
 ) -> torch.Tensor:
-    hidden_size = inferred_embeddings_all.shape[-1]
-    inferred_2d = rearrange(
-        inferred_embeddings_all,
-        "b (n h w) d -> (b n) d h w",
-        n=num_frames,
-        h=target_side,
-        w=target_side,
-    )
-    upsampled = model.upsample_conv(inferred_2d)
-    h_upsampled, w_upsampled = upsampled.shape[-2:]
-    upsampled = upsampled.permute(0, 2, 3, 1).reshape(batch_size * num_frames, -1, hidden_size)
-    pred_latent = model.gen_out_proj(model.gen_out_layer_norm(upsampled))
-    pred_latent = pred_latent.view(batch_size * num_frames, h_upsampled, w_upsampled, pred_latent.shape[-1])
-    pred_latent = pred_latent.permute(0, 3, 1, 2).contiguous()
+    """
+    inferred_embeddings_all: (B, N, hidden_size)  — 1 predicted token per frame
+    Returns: (B*N, vae_channels, vae_spatial, vae_spatial)
+    """
+    # Reshape to (B*N, 1, hidden_size) for cross-attn decompressor
+    latent_tokens = rearrange(inferred_embeddings_all, "b n d -> (b n) 1 d")
+    pred_latent = model.latent_decompressor(latent_tokens)   # (B*N, C, H, W)
     return pred_latent
 
 
@@ -440,32 +432,20 @@ def train(args: argparse.Namespace) -> None:
         trust_remote_code=True
     )
     if args.vision_backend == 'cosmos_vae':
-        if args.latent_size not in (4, 16, 64):
-            raise ValueError(f"Only latent_size in [4, 16, 64] is supported, got {args.latent_size}")
-        num_frames_for_scale = 4
-        target_side_for_scale = infer_latent_side(args.latent_size, num_frames_for_scale)
-
         from janus.models.cosmos_tokenizer.image_lib import ImageTokenizer
 
-        cosmos_ckpt_dir = os.environ.get(
-            "COSMOS_TOKENIZER_DIR",
-            "/mnt/dataset/share_code/hf_cache/Cosmos-0.1-Tokenizer-CI8x8",
-        )
+        cosmos_ckpt_dir = args.cosmos_tokenizer_dir
         probe_tokenizer = ImageTokenizer(
             checkpoint_enc=f"{cosmos_ckpt_dir}/encoder.jit",
             checkpoint_dec=f"{cosmos_ckpt_dir}/decoder.jit",
         )
         with torch.no_grad():
             probe_latent = probe_tokenizer.encode(torch.zeros(1, 3, 256, 256, dtype=torch.float32).to(accelerator.device))
-        cosmos_side = int(probe_latent.shape[-1])
-        if cosmos_side % target_side_for_scale != 0:
-            raise ValueError(
-                f"cosmos latent side ({cosmos_side}) must be divisible by target side ({target_side_for_scale})"
-            )
-        cosmos_scale_factor = cosmos_side // target_side_for_scale
+        cosmos_side = int(probe_latent.shape[-1])   # 32 for CI8x8 + 256x256
         del probe_tokenizer
+        accelerator.print(f"Cosmos VAE latent spatial side: {cosmos_side}")
     else:
-        cosmos_scale_factor = None
+        cosmos_side = None
 
     model = AutoModelForCausalLM.from_pretrained(
         args.pretrain_path,
@@ -477,41 +457,27 @@ def train(args: argparse.Namespace) -> None:
         use_pointcloud=False,
         use_latent=args.use_latent,
         vision_backend=args.vision_backend,
-        cosmos_scale_factor=cosmos_scale_factor,
-        latent_downsample_mode=args.latent_downsample_mode,
+        cosmos_side=cosmos_side,
         ignore_mismatched_sizes=True,
     )
     if args.vision_backend == 'cosmos_vae':
         accelerator.print(
-            f"latent_size={args.latent_size}, target_side={target_side_for_scale}, "
-            f"cosmos_scale_factor={cosmos_scale_factor}, "
-            f"latent_downsample_mode={args.latent_downsample_mode}"
+            f"latent_size={args.latent_size}, cosmos_side={cosmos_side}, "
+            f"using cross-attention latent compressor/decompressor"
         )
-        # Re-init newly introduced modules that are not in pretrained checkpoint.
-        for mname, m in model.named_modules():
-            if any(
-                mname.startswith(prefix)
-                for prefix in [
-                    "gen_in_proj",
-                    "downsample_conv",
-                    "upsample_conv",
-                    "gen_out_proj",
-                    "gen_out_layer_norm",
-                ]
-            ):
-                if isinstance(m, (nn.Conv2d, nn.ConvTranspose2d)):
-                    nn.init.kaiming_uniform_(m.weight, a=math.sqrt(5))
-                    if m.bias is not None:
-                        fan_in = m.weight.shape[1] * m.weight.shape[2] * m.weight.shape[3]
-                        bound = 1.0 / math.sqrt(fan_in)
-                        nn.init.uniform_(m.bias, -bound, bound)
-                elif isinstance(m, nn.Linear):
-                    nn.init.xavier_uniform_(m.weight)
-                    if m.bias is not None:
-                        nn.init.zeros_(m.bias)
-                elif isinstance(m, nn.LayerNorm):
-                    nn.init.ones_(m.weight)
-                    nn.init.zeros_(m.bias)
+        # Re-init newly introduced cross-attn modules (not present in pretrained checkpoint).
+        for pname, param in model.named_parameters():
+            if any(pname.startswith(prefix) for prefix in ["latent_compressor", "latent_decompressor"]):
+                if "query_token" in pname:
+                    nn.init.normal_(param.data, std=0.02)
+                elif param.dim() >= 2:
+                    try:
+                        nn.init.xavier_uniform_(param.data)
+                    except ValueError:
+                        nn.init.normal_(param.data, std=0.02)
+                else:
+                    nn.init.zeros_(param.data)
+                accelerator.print(f"  Re-init: {pname} {tuple(param.shape)}")
 
     model_action = AutoModelForCausalLM.from_pretrained(
         args.pretrain_action_path,
@@ -523,8 +489,7 @@ def train(args: argparse.Namespace) -> None:
         use_pointcloud=False,
         use_latent=args.use_latent,
         vision_backend=args.vision_backend,
-        cosmos_scale_factor=cosmos_scale_factor,
-        latent_downsample_mode=args.latent_downsample_mode,
+        cosmos_side=cosmos_side,
         ignore_mismatched_sizes=True,
     )
 
@@ -654,25 +619,13 @@ def train(args: argparse.Namespace) -> None:
                     raise ValueError(
                         f"latent_size mismatch between args ({args.latent_size}) and prompt pads ({target_latent_size})"
                     )
-                target_side = infer_latent_side(target_latent_size, num_frames)
 
-                if model.gen_in_proj.weight.dtype == torch.float32:
-                    gt_latent_for_conv = gt_latent_features.to(torch.float32)
-                else:
-                    gt_latent_for_conv = gt_latent_features.to(model.gen_in_proj.weight.dtype)
-                gen_features = model.gen_in_proj(gt_latent_for_conv)
-                compressed_2d = model.downsample_conv(gen_features)
-                if compressed_2d.shape[-2:] != (target_side, target_side):
-                    raise ValueError(
-                        f"Compressed side mismatch: got {compressed_2d.shape[-2:]}, expected {(target_side, target_side)}"
-                    )
-                compressed_flat = rearrange(compressed_2d, "bn d h w -> bn (h w) d")
-                compressed_latent_embeds = rearrange(
-                    compressed_flat,
-                    "(b n) k d -> b (n k) d",
-                    b=bs,
-                    n=num_frames
-                )
+                comp_dtype = next(model.latent_compressor.parameters()).dtype
+                gt_latent_for_comp = gt_latent_features.to(comp_dtype)
+                # Cross-attn compress: (B*N, C, H, W) -> (B*N, 1, hidden_size)
+                compressed_tokens = model.latent_compressor(gt_latent_for_comp)
+                # Stack frames: (B*N, 1, H) -> (B, N, H)
+                compressed_latent_embeds = rearrange(compressed_tokens, "(b n) 1 d -> b n d", b=bs, n=num_frames)
                 compressed_latent_embeds = compressed_latent_embeds.to(inputs_embeds.dtype)
                 
                 pad_mask = (batch['input_ids'] == latent_pad_id)
@@ -733,20 +686,13 @@ def train(args: argparse.Namespace) -> None:
                 # Detach so recon_loss only trains upsample/decode, not language model
                 # inferred_detached = inferred_embeddings_all.detach()
                 
-                up_dtype = next(model.upsample_conv.parameters()).dtype
-                infer_for_sim = inferred_embeddings_all.to(up_dtype) 
-                
-                # recon的detach也删掉
-                # if up_dtype == torch.float32:
-                #     infer_for_recon = inferred_detached.to(torch.float32)
-                # else:
-                #     infer_for_recon = inferred_detached.to(up_dtype)
-                
+                decomp_dtype = next(model.latent_decompressor.parameters()).dtype
+                infer_for_sim = inferred_embeddings_all.to(decomp_dtype)
+
                 pred_latent_features = build_pred_latent_features(
                     infer_for_sim,
                     batch_size=bs,
                     num_frames=num_frames,
-                    target_side=target_side,
                     model=model,
                 )
                 gt_latent_features = gt_latent_features.to(torch.float32)
@@ -912,13 +858,16 @@ if __name__ == '__main__':
     parser.add_argument(
         '--latent_downsample_mode',
         type=str,
-        default='single',
-        choices=['single', 'stacked'],
-        help="Cosmos latent spatial pool: single large conv vs stacked 3x3 stride-2 (+SiLU) with matching transpose stack",
+        default='cross_attn',
+        choices=['cross_attn'],
+        help="Latent token compress mode: cross_attn uses learnable query cross-attention (default).",
     )
     parser.add_argument('--recon_mode', type=str, default='latent', choices=['latent', 'pixel'])
     parser.add_argument('--recon_weight', type=float, default=1.0)
     parser.add_argument('--sim_weight', type=float, default=1.0)
+    parser.add_argument('--cosmos_tokenizer_dir', type=str,
+                        default='/mnt/dataset/share/hwb/hf_cache/Cosmos-0.1-Tokenizer-CI8x8',
+                        help='Path to Cosmos tokenizer checkpoint directory')
 
     args = parser.parse_args()
 

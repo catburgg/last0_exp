@@ -15,11 +15,17 @@ from experiments.robot.robot_utils import (
 )
 
 
-def get_libero_env(task, model_family, resolution=256, seed=0):
+def get_libero_env(task, model_family, resolution=256, seed=0, use_wrist_camera=True):
     """Initializes and returns the LIBERO environment, along with the task description."""
     task_description = task.language
     task_bddl_file = os.path.join(get_libero_path("bddl_files"), task.problem_folder, task.bddl_file)
-    env_args = {"bddl_file_name": task_bddl_file, "camera_heights": resolution, "camera_widths": resolution}
+    camera_names = ["agentview", "robot0_eye_in_hand"] if use_wrist_camera else ["agentview"]
+    env_args = {
+        "bddl_file_name": task_bddl_file,
+        "camera_heights": resolution,
+        "camera_widths": resolution,
+        "camera_names": camera_names,
+    }
     env = OffScreenRenderEnv(**env_args)
     env.seed(seed)  # IMPORTANT: seed seems to affect object positions even when using fixed initial state
     return env, task_description
@@ -44,10 +50,9 @@ def get_libero_wrist_image(obs):
     return img
 
 
-def save_rollout_video(rollout_images, idx, success, task_description, log_file=None):
+def save_rollout_video(rollout_images, idx, success, task_description, log_file=None, save_dir=None):
     """Saves an MP4 replay of an episode."""
-    # rollout_dir = f"/mnt/data/chenhao_save/vis/lcot_doublerl/libero/rollouts/{DATE}"
-    rollout_dir = f"./rollouts/{DATE}"
+    rollout_dir = save_dir if save_dir is not None else f"./rollouts/{DATE}"
     os.makedirs(rollout_dir, exist_ok=True)
     processed_task_description = task_description.lower().replace(" ", "_").replace("\n", "_").replace(".", "_")[:50]
     mp4_path = f"{rollout_dir}/{DATE_TIME}--openvla_oft--episode={idx}--success={success}--task={processed_task_description}.mp4"

@@ -110,7 +110,7 @@ class GenerateConfig:
     # Utils
     #################################################################################################################
     run_id_note: Optional[str] = None                # Extra note to add to end of run ID for logging
-    local_log_dir: str = "./experiments/logs"        # Local directory for eval logs
+    output_dir: str = "./experiments/eval_output"    # Root output directory; logs -> output_dir/logs, videos -> output_dir/rollouts/<task_suite_name>
     save_videos: bool = True                         # Whether to save rollout videos
 
     use_wandb: bool = False                          # Whether to also log results in Weights & Biases
@@ -174,8 +174,9 @@ def setup_logging(cfg: GenerateConfig):
         run_id += f"--{cfg.run_id_note}"
 
     # Set up local logging
-    os.makedirs(cfg.local_log_dir, exist_ok=True)
-    local_log_filepath = os.path.join(cfg.local_log_dir, run_id + ".txt")
+    log_dir = os.path.join(cfg.output_dir, "logs")
+    os.makedirs(log_dir, exist_ok=True)
+    local_log_filepath = os.path.join(log_dir, run_id + ".txt")
     log_file = open(local_log_filepath, "w")
     logger.info(f"Logging to local log file: {local_log_filepath}")
 
@@ -417,8 +418,10 @@ def run_task(
 
         # Save replay video
         if cfg.save_videos:
+            video_save_dir = os.path.join(cfg.output_dir, "rollouts", cfg.task_suite_name)
             save_rollout_video(
-                replay_images, total_episodes, success=success, task_description=task_description, log_file=log_file
+                replay_images, total_episodes, success=success, task_description=task_description,
+                log_file=log_file, save_dir=video_save_dir,
             )
 
         # Log results

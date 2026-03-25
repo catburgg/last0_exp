@@ -1,24 +1,46 @@
-
-cd /mnt/nas/zhangxuheng/last0
-export PYTHONPATH=/mnt/nas/zhangxuheng/LIBERO:$PYTHONPATH
-export PYTHONPATH=/mnt/nas/zhangxuheng:/mnt/nas/zhangxuheng/last0/transformers:$PYTHONPATH
-export TOKENIZERS_PARALLELISM=false
+export LIBERO_CONFIG_PATH=/mnt/workspace/caojiajun/.libero
+cd /mnt/workspace/caojiajun/code/last0_exp
+source /mnt/workspace/caojiajun/miniconda3/bin/activate
+conda activate /mnt/workspace/caojiajun/miniconda3/envs/cosmos_mot
+export PATH=/mnt/workspace/caojiajun/miniconda3/envs/cosmos_mot/bin:$PATH
+export HF_HOME=/mnt/dataset/share/hwb/hf_cache
+export PYTHONPATH=/mnt/workspace/caojiajun/code/last0_exp/LIBERO:$PYTHONPATH
+export PYTHONPATH=/mnt/workspace/caojiajun/code/last0_exp:$PYTHONPATH
+export WANDB_MODE=offline
 
 # EGL headless rendering setup (required in containerized environments)
-export MUJOCO_GL=egl
-export PYOPENGL_PLATFORM=egl
-mkdir -p /usr/share/glvnd/egl_vendor.d/
-echo '{"file_format_version":"1.0.0","ICD":{"library_path":"libEGL_nvidia.so.0"}}' > /usr/share/glvnd/egl_vendor.d/10_nvidia.json
+N=3
+pkill -f "Xvfb :$N" || true
 
-# Launch LIBERO evals
+Xvfb :$N -screen 0 1024x768x24 &
+export DISPLAY=:$N
+
+unset LD_PRELOAD
+unset EGL_DEVICE_ID
+unset PYOPENGL_PLATFORM
+# # export MUJOCO_GL=egl
+# # export EGL_DEVICE_ID=0
+# # export __NV_PRIME_RENDER_OFFLOAD=1
+# # export __GLX_VENDOR_LIBRARY_NAME=nvidia
+# # export LD_PRELOAD=/usr/lib/x86_64-linux-gnu/libstdc++.so.6
+# # export __GLVND_DISALLOW_PATCHING=1
+# # export LD_PRELOAD=/usr/lib/x86_64-linux-gnu/libstdc++.so.6
+export MUJOCO_GL=osmesa
+export PYOPENGL_PLATFORM=osmesa
+
+# export CUDA_VISIBLE_DEVICES=1 
+
+OUTPUT_DIR=/mnt/workspace/caojiajun/code/last0_exp/ckpt/libero_spatial_query_0323/test_output/checkpoint-79-66240
+mkdir -p $OUTPUT_DIR
 python experiments/robot/libero/run_libero_eval.py \
-  --pretrained_checkpoint /mnt/data/zhangxuheng/ckpt/exp/libero_spatial_ablation/pure_pixel_recon_ls16/checkpoint-24-82775/tfmr \
+  --pretrained_checkpoint /mnt/workspace/caojiajun/code/last0_exp/ckpt/libero_spatial_query_0323/libero_spatial_query/checkpoint-79-66240/tfmr \
   --task_suite_name libero_spatial \
   --cuda "0" \
   --vision_backend cosmos_vae \
-  --latent_size 16 \
+  --latent_size 4 \
   --num_open_loop_steps 8 \
   --save_videos False \
-  --seed 0
+  --seed 0 \
+  --output_dir $OUTPUT_DIR
 
 # libero_spatial libero_object libero_goal libero_10
