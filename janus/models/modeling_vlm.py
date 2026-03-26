@@ -272,6 +272,7 @@ class MultiModalityCausalLM(MultiModalityPreTrainedModel):
                 cosmos_dit_path: str = None,
                 wan_vae_path: str = None,
                 dit_align_mode: str = "conv",
+                dit_num_blocks: int = 11,
                 **kwargs,
             ):
         super().__init__(config)
@@ -403,13 +404,39 @@ class MultiModalityCausalLM(MultiModalityPreTrainedModel):
             )
             self.cosmos_tokenizer = None
             self.wan_vae = WanVAEEncoder(ckpt_path=wan_ckpt)
-            self.cosmos_dit = CosmosDiTEarlyExit(ckpt_path=dit_ckpt, num_exit_blocks=10)
+            self.cosmos_dit = CosmosDiTEarlyExit(ckpt_path=dit_ckpt, num_blocks=dit_num_blocks)
             if dit_align_mode == "attn":
                 self.dit_patch_vectorizer = DitPatchVectorizerAttn()
             elif dit_align_mode == "avg":
                 self.dit_patch_vectorizer = DitPatchVectorizerAvgPool()
             else:
                 self.dit_patch_vectorizer = DitPatchVectorizerConv()
+            self.dit_gt_to_llm = nn.Linear(DIT_DIM, hidden_size)
+            self.dit_out_proj = nn.Linear(hidden_size, DIT_DIM)
+
+        elif vision_backend == "cosmos_denoise":
+            from janus.models.cosmos_tokenizer.dit_lib import (
+                CosmosDiTFullHead,
+                HIDDEN_DIM as DIT_DIM,
+                NUM_DIT_BLOCKS,
+            )
+            from janus.models.cosmos_tokenizer.wan_vae_lib import WanVAEEncoder
+
+            hidden_size = language_config.hidden_size
+            wan_ckpt = wan_vae_path or os.environ.get(
+                "WAN_VAE_PATH",
+                "/mnt/wfm/ckpt/ckpt/pretrained/Cosmos-Predict2.5-2B/tokenizer.pth",
+            )
+            dit_ckpt = cosmos_dit_path or os.environ.get(
+                "COSMOS_DIT_PATH",
+                "/mnt/wfm/ckpt/ckpt/pretrained/Cosmos-Predict2.5-2B/"
+                "robot/policy/libero/model.pt",
+            )
+            self.cosmos_tokenizer = None
+            self.wan_vae = WanVAEEncoder(ckpt_path=wan_ckpt)
+            # dit_num_blocks controls how many of the 28 blocks to run; pass 28 for all
+            num_blocks = min(dit_num_blocks, NUM_DIT_BLOCKS) if dit_num_blocks > 0 else NUM_DIT_BLOCKS
+            self.cosmos_dit = CosmosDiTFullHead(ckpt_path=dit_ckpt, num_blocks=num_blocks)
             self.dit_gt_to_llm = nn.Linear(DIT_DIM, hidden_size)
             self.dit_out_proj = nn.Linear(hidden_size, DIT_DIM)
 

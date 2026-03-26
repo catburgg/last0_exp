@@ -17,10 +17,9 @@
 # IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
 # CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
-from .image_processing_vlm import VLMImageProcessor
-from .modeling_vlm import MultiModalityCausalLM
-from .processing_vlm import VLChatProcessor
 from .action_tokenizer import ActionTokenizer
+from .image_processing_vlm import VLMImageProcessor
+from .processing_vlm import VLChatProcessor
 
 __all__ = [
     "VLMImageProcessor",
@@ -28,3 +27,11 @@ __all__ = [
     "MultiModalityCausalLM",
     "ActionTokenizer",
 ]
+
+
+def __getattr__(name: str):
+    if name == "MultiModalityCausalLM":
+        from .modeling_vlm import MultiModalityCausalLM
+
+        return MultiModalityCausalLM
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

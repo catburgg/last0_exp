@@ -56,16 +56,20 @@ if is_vision_available():
         PILImageResampling = PIL.Image
 
     if is_torchvision_available():
-        from torchvision.transforms import InterpolationMode
+        try:
+            from torchvision.transforms import InterpolationMode
 
-        pil_torch_interpolation_mapping = {
-            PILImageResampling.NEAREST: InterpolationMode.NEAREST_EXACT,
-            PILImageResampling.BOX: InterpolationMode.BOX,
-            PILImageResampling.BILINEAR: InterpolationMode.BILINEAR,
-            PILImageResampling.HAMMING: InterpolationMode.HAMMING,
-            PILImageResampling.BICUBIC: InterpolationMode.BICUBIC,
-            PILImageResampling.LANCZOS: InterpolationMode.LANCZOS,
-        }
+            pil_torch_interpolation_mapping = {
+                PILImageResampling.NEAREST: InterpolationMode.NEAREST_EXACT,
+                PILImageResampling.BOX: InterpolationMode.BOX,
+                PILImageResampling.BILINEAR: InterpolationMode.BILINEAR,
+                PILImageResampling.HAMMING: InterpolationMode.HAMMING,
+                PILImageResampling.BICUBIC: InterpolationMode.BICUBIC,
+                PILImageResampling.LANCZOS: InterpolationMode.LANCZOS,
+            }
+        except (ImportError, RuntimeError, OSError):
+            # Installed torchvision can be incompatible with the current torch (e.g. missing Meta kernels).
+            pil_torch_interpolation_mapping = {}
     else:
         pil_torch_interpolation_mapping = {}
 

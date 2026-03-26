@@ -42,13 +42,19 @@ from .utils import (
     requires_backends,
 )
 
+torchvision_io = None
 
 if is_vision_available():
     import PIL.Image
     import PIL.ImageOps
 
     if is_torchvision_available():
-        from torchvision import io as torchvision_io
+        try:
+            from torchvision import io as _torchvision_io
+
+            torchvision_io = _torchvision_io
+        except (ImportError, RuntimeError, OSError, AttributeError):
+            torchvision_io = None
 
 if is_torch_available():
     import torch
@@ -427,6 +433,10 @@ def read_video_torchvision(
             - Numpy array of frames in RGB (shape: [num_frames, height, width, 3]).
             - `VideoMetadata` object.
     """
+    if torchvision_io is None:
+        raise ImportError(
+            "torchvision video IO is not available (incompatible or broken torchvision build)."
+        )
     warnings.warn(
         "Using `torchvision` for video decoding is deprecated and will be removed in future versions. "
         "Please use `torchcodec` instead."

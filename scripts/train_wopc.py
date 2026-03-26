@@ -6,7 +6,10 @@ import argparse
 import random
 import shutil
 import math
-import wandb
+try:
+    import wandb
+except ImportError:
+    wandb = None  # optional; visualization-only runs may lack setuptools/pkg_resources
 import PIL.Image
 import numpy as np
 import time
@@ -26,7 +29,8 @@ from transformers import (
     set_seed,
 )
 from transformers import AutoModelForCausalLM
-from janus.models import VLChatProcessor, ActionTokenizer
+from janus.models import ActionTokenizer, VLChatProcessor
+import janus.models.modeling_vlm  # noqa: F401 — registers multi_modality with AutoConfig / AutoModelForCausalLM
 
 logger = logging.getLogger(__name__)
 logging.basicConfig(level='INFO')
@@ -245,7 +249,14 @@ class SftDataset(Dataset):
                 for img_list in latent_images_nested
             ]
             latent_pixel_values = torch.stack(latent_pixel_values_list, dim=0)
-        
+
+            # Current frame (input_image_slow[0]) for cosmos_denoise conditioning
+            current_image_paths = [
+                os.path.join(self.img_dir, x['input_image_slow'][0]) for x in batch
+            ]
+            current_pixel_values = self.process_image(current_image_paths).to(torch.bfloat16)
+            # [B, C, H, W]  SIGLIP-normalized, same format as latent_pixel_values
+
             # State
             latent_state_ids_list = []
             for x in batch:
@@ -265,6 +276,7 @@ class SftDataset(Dataset):
         else:
             latent_pixel_values = None
             latent_state_ids = None
+            current_pixel_values = None
 
         input_img_tokens = self.processor.image_start_tag + self.processor.image_tag * self.processor.num_image_tokens + self.processor.image_end_tag
 
@@ -364,6 +376,7 @@ class SftDataset(Dataset):
             "input_ids": prepare_inputs.input_ids,
             "encoder_pixel_values": prepare_inputs.pixel_values.to(torch.bfloat16),
             "latent_pixel_values": latent_pixel_values,
+            "current_pixel_values": current_pixel_values if self.config.use_latent else None,
             "latent_state_ids": latent_state_ids,
             "noisy_actions": x_t,
             "target": u_t,
@@ -422,7 +435,7 @@ def train(args: argparse.Namespace) -> None:
     # Set random seed
     set_seed(args.seed)
 
-    if accelerator.is_main_process:
+    if accelerator.is_main_process and wandb is not None:
         wandb.init(
             project=args.experiment_name,
             name=args.run_name,
@@ -478,6 +491,7 @@ def train(args: argparse.Namespace) -> None:
         cosmos_dit_path=args.cosmos_dit_path,
         wan_vae_path=args.wan_vae_path,
         dit_align_mode=args.dit_align_mode,
+        dit_num_blocks=args.dit_num_blocks,
         ignore_mismatched_sizes=True,
     )
     if args.vision_backend == 'cosmos_vae':
@@ -527,6 +541,7 @@ def train(args: argparse.Namespace) -> None:
         cosmos_dit_path=args.cosmos_dit_path,
         wan_vae_path=args.wan_vae_path,
         dit_align_mode=args.dit_align_mode,
+        dit_num_blocks=args.dit_num_blocks,
         ignore_mismatched_sizes=True,
     )
 
@@ -596,7 +611,9 @@ def train(args: argparse.Namespace) -> None:
             f"[wan_dit] Replacing wan_vae and cosmos_dit with CPU-loaded copies from\n  {_wan}\n  {_dit}"
         )
         model.wan_vae = WanVAEEncoder(_wan, device="cpu").to(dtype=torch.bfloat16)
-        model.cosmos_dit = CosmosDiTEarlyExit(_dit, num_exit_blocks=10, device="cpu").to(dtype=torch.bfloat16)
+        model.cosmos_dit = CosmosDiTEarlyExit(
+            _dit, num_blocks=args.dit_num_blocks, device="cpu"
+        ).to(dtype=torch.bfloat16)
 
         from janus.models.cosmos_tokenizer.dit_lib import (
             DitPatchVectorizerAttn,
@@ -631,6 +648,40 @@ def train(args: argparse.Namespace) -> None:
                     for p in m.parameters():
                         if p.dim() > 1:
                             nn.init.xavier_uniform_(p)
+
+    elif args.vision_backend == "cosmos_denoise":
+        from janus.models.cosmos_tokenizer.dit_lib import (
+            CosmosDiTFullHead, HIDDEN_DIM as DIT_DIM, NUM_DIT_BLOCKS,
+        )
+        from janus.models.cosmos_tokenizer.wan_vae_lib import WanVAEEncoder
+
+        _wan = args.wan_vae_path or os.environ.get(
+            "WAN_VAE_PATH",
+            "/mnt/wfm/ckpt/ckpt/pretrained/Cosmos-Predict2.5-2B/tokenizer.pth",
+        )
+        _dit = args.cosmos_dit_path or os.environ.get(
+            "COSMOS_DIT_PATH",
+            "/mnt/wfm/ckpt/ckpt/pretrained/Cosmos-Predict2.5-2B/robot/policy/libero/model.pt",
+        )
+        accelerator.print(
+            f"[cosmos_denoise] Replacing wan_vae and cosmos_dit with CPU-loaded copies from\n  {_wan}\n  {_dit}"
+        )
+        model.wan_vae = WanVAEEncoder(_wan, device="cpu").to(dtype=torch.bfloat16)
+        num_blocks = min(args.dit_num_blocks, NUM_DIT_BLOCKS) if args.dit_num_blocks > 0 else NUM_DIT_BLOCKS
+        model.cosmos_dit = CosmosDiTFullHead(
+            _dit, num_blocks=num_blocks, device="cpu"
+        ).to(dtype=torch.bfloat16)
+
+        hs = model.language_model.config.hidden_size
+        model.dit_gt_to_llm = nn.Linear(DIT_DIM, hs).to(dtype=torch.bfloat16)
+        model.dit_out_proj = nn.Linear(hs, DIT_DIM).to(dtype=torch.bfloat16)
+
+        for mname, m in model.named_modules():
+            if mname.startswith(("dit_gt_to_llm", "dit_out_proj")):
+                if isinstance(m, nn.Linear):
+                    nn.init.xavier_uniform_(m.weight)
+                    if m.bias is not None:
+                        nn.init.zeros_(m.bias)
 
     accelerator.print("\n==== Parameter Freeze Status ====\n")
     for name, param in model.named_parameters():
@@ -737,6 +788,128 @@ def train(args: argparse.Namespace) -> None:
                 _p = next(model.dit_patch_vectorizer.parameters(), None)
                 agg_dtype = _p.dtype if _p is not None else spatial.dtype
                 dit_vec_bn = model.dit_patch_vectorizer(spatial.to(agg_dtype))
+                compressed_latent_embeds = model.dit_gt_to_llm(dit_vec_bn).view(bs, num_frames, -1)
+
+                latent_start_id = processor.tokenizer.convert_tokens_to_ids("<|latent_start|>")
+                latent_pad_id = processor.tokenizer.convert_tokens_to_ids("<|latent_pad|>")
+                pad_mask = batch['input_ids'] == latent_pad_id
+                extra_len = inputs_embeds.shape[1] - pad_mask.shape[1]
+                if extra_len > 0:
+                    pad_mask = torch.cat(
+                        [
+                            pad_mask,
+                            torch.zeros(
+                                (pad_mask.shape[0], extra_len), dtype=torch.bool, device=pad_mask.device
+                            ),
+                        ],
+                        dim=1,
+                    )
+                inputs_embeds = inputs_embeds.clone()
+                inputs_embeds[pad_mask] = compressed_latent_embeds.reshape(-1, compressed_latent_embeds.shape[-1])
+
+                outputs = model.language_model.model(
+                    inputs_embeds=inputs_embeds,
+                    attention_mask=batch['attention_mask'],
+                    return_dict=True,
+                    use_cache=False,
+                    latent_indexes=latent_indexes.to(inputs_embeds.device),
+                    action_indexes=action_indexes.to(inputs_embeds.device),
+                    use_latent=args.use_latent,
+                )
+                hidden_states = outputs.last_hidden_state
+
+                pred_embeddings_list = []
+                for b in range(inputs_embeds.shape[0]):
+                    start_idx = (batch['input_ids'][b] == latent_start_id).nonzero(as_tuple=True)[0]
+                    pad_idxs = (batch['input_ids'][b] == latent_pad_id).nonzero(as_tuple=True)[0]
+                    pred_input_idxs = torch.cat([start_idx, pad_idxs[:-1]]) if len(pad_idxs) > 0 else start_idx
+                    pred_embeddings_list.append(hidden_states[b, pred_input_idxs, :])
+                inferred_embeddings_all = torch.stack(pred_embeddings_list, dim=0)
+
+                pred_dit_features = build_dit_pred_features(
+                    inferred_embeddings_all.to(torch.float32),
+                    batch_size=bs,
+                    num_frames=num_frames,
+                    latent_size=args.latent_size,
+                    dit_out_proj=model.dit_out_proj,
+                )
+                sim_loss = 1.0 - F.cosine_similarity(
+                    pred_dit_features, dit_vec_bn.to(torch.float32), dim=-1
+                ).mean()
+                recon_loss = torch.tensor(0.0, device=sim_loss.device)
+
+                inputs_embeds[pad_mask] = inferred_embeddings_all.reshape(-1, inferred_embeddings_all.shape[-1])
+
+                outputs = model.language_model.model(
+                    inputs_embeds=inputs_embeds,
+                    attention_mask=batch['attention_mask'],
+                    return_dict=True,
+                    use_cache=False,
+                    latent_indexes=latent_indexes.to(inputs_embeds.device),
+                    action_indexes=action_indexes.to(inputs_embeds.device),
+                    use_latent=args.use_latent,
+                )
+                hidden_states = outputs.last_hidden_state
+
+                predicted_noise = model.final_layer(hidden_states)[:, -(batch['target'].shape[1]):, :]
+                action_loss = nn.MSELoss()(predicted_noise, batch['target'].to(predicted_noise.dtype))
+                loss = (
+                    args.sim_weight * sim_loss
+                    + args.action_loss_weight * action_loss
+                    + args.recon_weight * recon_loss
+                )
+                metric(action_loss, sim_loss, recon_loss)
+
+            elif args.vision_backend == 'cosmos_denoise':
+                from janus.models.cosmos_tokenizer.dit_lib import build_dit_pred_features
+
+                sigma = float(args.cosmos_denoise_sigma)
+                bs = batch['latent_pixel_values'].shape[0]
+                num_frames = batch['latent_pixel_values'].shape[1]
+
+                # --- encode current frame (clean conditioning) ---
+                current_cosmos = convert_to_cosmos_input(
+                    batch['current_pixel_values'].float(), image_mean, image_std
+                )
+                current_240 = F.interpolate(
+                    current_cosmos, size=(240, 240), mode='bilinear', align_corners=False
+                ).unsqueeze(2)  # [B, 3, 1, 240, 240]
+                with torch.no_grad():
+                    current_latent = model.wan_vae.encode(current_240)
+                mu_current = current_latent[:, :8]  # [B, 8, 1, 30, 30]
+
+                # --- encode future frames ---
+                future_imgs = rearrange(batch['latent_pixel_values'], "b n c h w -> (b n) c h w")
+                future_cosmos = convert_to_cosmos_input(future_imgs.float(), image_mean, image_std)
+                future_240 = F.interpolate(
+                    future_cosmos, size=(240, 240), mode='bilinear', align_corners=False
+                ).unsqueeze(2)  # [B*N, 3, 1, 240, 240]
+                with torch.no_grad():
+                    future_latent = model.wan_vae.encode(future_240)
+                mu_future = future_latent[:, :8]  # [B*N, 8, 1, 30, 30]
+
+                epsilon = torch.randn_like(mu_future)
+                xt_future = sigma * epsilon + (1 - sigma) * mu_future  # [B*N, 8, 1, 30, 30]
+
+                # repeat current frame for each future frame, concat in T dim
+                # → [current_clean | noisy_future] per pair
+                mu_current_bn = mu_current.unsqueeze(1).expand(-1, num_frames, -1, -1, -1, -1)
+                mu_current_bn = rearrange(mu_current_bn, "b n c t h w -> (b n) c t h w")
+                xt_pair = torch.cat([mu_current_bn, xt_future], dim=2)  # [B*N, 8, 2, 30, 30]
+
+                # DiT forward → hidden state before final_layer
+                dit_wdtype = next(model.cosmos_dit.parameters()).dtype
+                with torch.no_grad():
+                    hidden = model.cosmos_dit.forward_hidden(
+                        xt_pair.to(dit_wdtype),
+                        num_blocks_run=args.dit_num_blocks,
+                        sigma=sigma,
+                    )  # [B*N, Tp=1, 15, 15, 2048]
+
+                assert hidden.shape == (bs * num_frames, 1, 15, 15, 2048), \
+                    f"unexpected hidden shape {hidden.shape}"
+
+                dit_vec_bn = hidden.mean(dim=[1, 2, 3])  # [B*N, 2048]
                 compressed_latent_embeds = model.dit_gt_to_llm(dit_vec_bn).view(bs, num_frames, -1)
 
                 latent_start_id = processor.tokenizer.convert_tokens_to_ids("<|latent_start|>")
@@ -962,12 +1135,13 @@ def train(args: argparse.Namespace) -> None:
                         recon_loss=f"{recon_loss:.6f}",
                         lr=f"{lr_scheduler.get_last_lr()[0]:.2e}"
                     )
-                    wandb.log({
-                        'action_loss': action_loss,
-                        'sim_loss': sim_loss,
-                        'recon_loss': recon_loss,
-                        'lr': lr_scheduler.get_last_lr()[0]
-                    }, step=global_step)
+                    if wandb is not None:
+                        wandb.log({
+                            'action_loss': action_loss,
+                            'sim_loss': sim_loss,
+                            'recon_loss': recon_loss,
+                            'lr': lr_scheduler.get_last_lr()[0]
+                        }, step=global_step)
             global_step += 1
 
         if ((epoch + 1) % args.save_freq == 0) or (epoch == args.n_epochs-1):
@@ -1027,7 +1201,7 @@ if __name__ == '__main__':
         '--vision_backend',
         type=str,
         default='cosmos_vae',
-        choices=['cosmos_vae', 'siglip', 'wan_dit'],
+        choices=['cosmos_vae', 'siglip', 'wan_dit', 'cosmos_denoise'],
     )
     parser.add_argument(
         '--dit_align_mode',
@@ -1035,6 +1209,12 @@ if __name__ == '__main__':
         default='conv',
         choices=['conv', 'attn', 'avg'],
         help='wan_dit only: aggregate DiT patch grid (B,H,W,D) to (B,D); avg = global mean over H,W',
+    )
+    parser.add_argument(
+        '--dit_num_blocks',
+        type=int,
+        default=11,
+        help='wan_dit only: number of DiT blocks to run (uses block indices 0..dit_num_blocks-1); Libero ckpt has 28',
     )
     parser.add_argument('--latent_downsample_mode', type=str, default='single', choices=['single', 'stacked'])
     parser.add_argument('--recon_mode', type=str, default='latent', choices=['latent', 'pixel'])
@@ -1052,6 +1232,12 @@ if __name__ == '__main__':
                         help='Path to Cosmos-Policy DiT checkpoint .pt file')
     parser.add_argument('--wan_vae_path', type=str, default=None,
                         help='Path to WAN VAE tokenizer.pth (Cosmos-Predict2.5-2B)')
+    parser.add_argument(
+        '--cosmos_denoise_sigma',
+        type=float,
+        default=0.5,
+        help='cosmos_denoise only: σ in x_t = σ·ε + (1-σ)·μ and DiT forward_hidden sigma (default 0.5).',
+    )
 
     args = parser.parse_args()
 

@@ -21,10 +21,9 @@ from typing import List, Tuple, Union
 
 import numpy as np
 import torch
-import torchvision
-import torchvision.transforms.functional
 from PIL import Image
-from transformers import AutoImageProcessor, PretrainedConfig
+from transformers.configuration_utils import PretrainedConfig
+from transformers.models.auto.image_processing_auto import AutoImageProcessor
 from transformers.image_processing_utils import BaseImageProcessor, BatchFeature
 from transformers.image_utils import to_numpy_array
 from transformers.utils import logging
@@ -146,12 +145,11 @@ class VLMImageProcessor(BaseImageProcessor):
             print(f"orig size = {pil_img.size}, new size = {size}")
             raise ValueError("Invalid size!")
 
-        pil_img = torchvision.transforms.functional.resize(
-            pil_img,
-            size,
-            interpolation=torchvision.transforms.functional.InterpolationMode.BICUBIC,
-            antialias=True,
-        )
+        try:
+            _bicubic = Image.Resampling.BICUBIC
+        except AttributeError:  # PIL < 9.1
+            _bicubic = Image.BICUBIC
+        pil_img = pil_img.resize((size[1], size[0]), resample=_bicubic)
 
         pil_img = expand2square(pil_img, self.background_color)
         x = to_numpy_array(pil_img)

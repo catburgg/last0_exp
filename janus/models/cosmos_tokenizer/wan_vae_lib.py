@@ -30,7 +30,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-__all__ = ["WanVAEEncoder", "WanVaeLatentBridge"]
+__all__ = ["WanVAEEncoder", "WanVAECodec", "WanVaeLatentBridge"]
 
 CACHE_T = 2
 
@@ -38,6 +38,14 @@ CACHE_T = 2
 # ---------------------------------------------------------------------------
 # Building blocks (copied from wan2pt1.py, all einops replaced with reshape)
 # ---------------------------------------------------------------------------
+
+
+class Upsample(nn.Upsample):
+    """Nearest upsample with bfloat16-friendly forward (match cosmos wan2pt1)."""
+
+    def forward(self, x):
+        return super().forward(x.float()).type_as(x)
+
 
 class CausalConv3d(nn.Conv3d):
     """Causal 3d convolution — pads time dimension on the left only."""
@@ -82,7 +90,18 @@ class Resample(nn.Module):
         self.dim = dim
         self.mode = mode
 
-        if mode == "downsample2d":
+        if mode == "upsample2d":
+            self.resample = nn.Sequential(
+                Upsample(scale_factor=(2.0, 2.0), mode="nearest-exact"),
+                nn.Conv2d(dim, dim // 2, 3, padding=1),
+            )
+        elif mode == "upsample3d":
+            self.resample = nn.Sequential(
+                Upsample(scale_factor=(2.0, 2.0), mode="nearest-exact"),
+                nn.Conv2d(dim, dim // 2, 3, padding=1),
+            )
+            self.time_conv = CausalConv3d(dim, dim * 2, (3, 1, 1), padding=(1, 0, 0))
+        elif mode == "downsample2d":
             self.resample = nn.Sequential(
                 nn.ZeroPad2d((0, 1, 0, 1)),
                 nn.Conv2d(dim, dim, 3, stride=(2, 2)),
@@ -98,6 +117,14 @@ class Resample(nn.Module):
 
     def forward(self, x, feat_cache=None, feat_idx=[0]):
         b, c, t, h, w = x.size()
+        # Spatial upsample (T=1 or no temporal cache): same 2D path for upsample2d / upsample3d
+        if self.mode in ("upsample2d", "upsample3d") and feat_cache is None:
+            x_2d = x.permute(0, 2, 1, 3, 4).reshape(b * t, c, h, w)
+            x_2d = self.resample(x_2d)
+            c_out, h_new, w_new = x_2d.shape[1], x_2d.shape[2], x_2d.shape[3]
+            x = x_2d.reshape(b, t, c_out, h_new, w_new).permute(0, 2, 1, 3, 4)
+            return x
+
         # resample on spatial dims: reshape to (b*t, c, h, w)
         x_2d = x.permute(0, 2, 1, 3, 4).reshape(b * t, c, h, w)
         x_2d = self.resample(x_2d)
@@ -250,6 +277,98 @@ class Encoder3d(nn.Module):
         return x
 
 
+class Decoder3d(nn.Module):
+    """WAN VAE decoder (tokenizer.pth ``decoder.*``); T=1, feat_cache=None for visualization."""
+
+    def __init__(
+        self,
+        dim=96,
+        z_dim=16,
+        dim_mult=(1, 2, 4, 4),
+        num_res_blocks=2,
+        attn_scales=(),
+        temperal_upsample=(True, True, False),
+        dropout=0.0,
+    ):
+        super().__init__()
+        self.dim = dim
+        self.z_dim = z_dim
+        dim_mult = tuple(dim_mult)
+        dims = [dim * u for u in (dim_mult[-1],) + tuple(dim_mult[::-1])]
+        scale = 1.0 / 2 ** (len(dim_mult) - 2)
+
+        self.conv1 = CausalConv3d(z_dim, dims[0], 3, padding=1)
+        self.middle = nn.Sequential(
+            ResidualBlock(dims[0], dims[0], dropout),
+            AttentionBlock(dims[0]),
+            ResidualBlock(dims[0], dims[0], dropout),
+        )
+
+        upsamples = []
+        for i, (in_dim, out_dim) in enumerate(zip(dims[:-1], dims[1:])):
+            if i in (1, 2, 3):
+                in_dim = in_dim // 2
+            for _ in range(num_res_blocks + 1):
+                upsamples.append(ResidualBlock(in_dim, out_dim, dropout))
+                if scale in attn_scales:
+                    upsamples.append(AttentionBlock(out_dim))
+                in_dim = out_dim
+            if i != len(dim_mult) - 1:
+                mode = "upsample3d" if temperal_upsample[i] else "upsample2d"
+                upsamples.append(Resample(out_dim, mode=mode))
+                scale *= 2.0
+        self.upsamples = nn.Sequential(*upsamples)
+        out_dim = dims[-1]
+        self.head = nn.Sequential(
+            RMS_norm(out_dim, images=False),
+            nn.SiLU(),
+            CausalConv3d(out_dim, 3, 3, padding=1),
+        )
+
+    def forward(self, x, feat_cache=None, feat_idx=None):
+        if feat_idx is None:
+            feat_idx = [0]
+        if feat_cache is not None:
+            idx = feat_idx[0]
+            cache_x = x[:, :, -CACHE_T:, :, :].clone()
+            if cache_x.shape[2] < 2 and feat_cache[idx] is not None:
+                cache_x = torch.cat(
+                    [feat_cache[idx][:, :, -1, :, :].unsqueeze(2).to(cache_x.device), cache_x], dim=2
+                )
+            x = self.conv1(x, feat_cache[idx])
+            feat_cache[idx] = cache_x
+            feat_idx[0] += 1
+        else:
+            x = self.conv1(x)
+
+        for layer in self.middle:
+            if isinstance(layer, ResidualBlock) and feat_cache is not None:
+                x = layer(x, feat_cache, feat_idx)
+            else:
+                x = layer(x)
+
+        for layer in self.upsamples:
+            if feat_cache is not None:
+                x = layer(x, feat_cache, feat_idx)
+            else:
+                x = layer(x)
+
+        for layer in self.head:
+            if isinstance(layer, CausalConv3d) and feat_cache is not None:
+                idx = feat_idx[0]
+                cache_x = x[:, :, -CACHE_T:, :, :].clone()
+                if cache_x.shape[2] < 2 and feat_cache[idx] is not None:
+                    cache_x = torch.cat(
+                        [feat_cache[idx][:, :, -1, :, :].unsqueeze(2).to(cache_x.device), cache_x], dim=2
+                    )
+                x = layer(x, feat_cache[idx])
+                feat_cache[idx] = cache_x
+                feat_idx[0] += 1
+            else:
+                x = layer(x)
+        return x
+
+
 # ---------------------------------------------------------------------------
 # Public wrapper
 # ---------------------------------------------------------------------------
@@ -350,6 +469,64 @@ class WanVAEEncoder(nn.Module):
         out = self.encoder(x)
         out = self.conv1(out)
         return out
+
+
+class WanVAECodec(nn.Module):
+    """
+    Full WAN tokenizer forward for **single-frame** recon: encode → mu (16ch) → conv2 → decoder → RGB.
+    Uses ``tokenizer.pth`` keys ``encoder.*``, ``conv1.*`` (via :class:`WanVAEEncoder`), ``conv2.*``, ``decoder.*``.
+    """
+
+    _TEMPORAL_UPSAMPLE = tuple(reversed(WanVAEEncoder.TEMPORAL_DOWNSAMPLE))
+
+    def __init__(self, ckpt_path: str, device: str = "cpu"):
+        super().__init__()
+        self.encoder = WanVAEEncoder(ckpt_path, device=device)
+        self.conv2 = CausalConv3d(
+            WanVAEEncoder.LATENT_Z_DIM,
+            WanVAEEncoder.LATENT_Z_DIM,
+            1,
+        )
+        self.decoder = Decoder3d(
+            dim=WanVAEEncoder.DIM,
+            z_dim=WanVAEEncoder.LATENT_Z_DIM,
+            dim_mult=WanVAEEncoder.DIM_MULT,
+            num_res_blocks=WanVAEEncoder.NUM_RES_BLOCKS,
+            attn_scales=WanVAEEncoder.ATTN_SCALES,
+            temperal_upsample=self._TEMPORAL_UPSAMPLE,
+            dropout=0.0,
+        )
+        sd = torch.load(ckpt_path, map_location=device, weights_only=False)
+        dec_sd = {k[len("decoder."):]: v for k, v in sd.items() if k.startswith("decoder.")}
+        dm, du = self.decoder.load_state_dict(dec_sd, strict=True)
+        if dm:
+            print(f"[WanVAECodec] decoder missing: {dm}")
+        if du:
+            print(f"[WanVAECodec] decoder unexpected: {du}")
+        c2_sd = {k[len("conv2."):]: v for k, v in sd.items() if k.startswith("conv2.")}
+        self.conv2.load_state_dict(c2_sd, strict=True)
+        for p in self.conv2.parameters():
+            p.requires_grad_(False)
+        for p in self.decoder.parameters():
+            p.requires_grad_(False)
+
+    @torch.no_grad()
+    def encode_latent(self, x: torch.Tensor) -> torch.Tensor:
+        return self.encoder.encode(x)
+
+    @torch.no_grad()
+    def decode_mu(self, mu: torch.Tensor) -> torch.Tensor:
+        """mu: (B, 16, T, H, W) → RGB (B, 3, T, H', W')."""
+        w_dtype = next(self.conv2.parameters()).dtype
+        z = self.conv2(mu.to(w_dtype))
+        return self.decoder(z, feat_cache=None, feat_idx=[0])
+
+    @torch.no_grad()
+    def recon(self, x: torch.Tensor) -> torch.Tensor:
+        """x: (B, 3, T, H, W) in [-1, 1] → reconstruction in [-1, 1]."""
+        lat = self.encode_latent(x)
+        mu = lat[:, : WanVAEEncoder.LATENT_Z_DIM]
+        return self.decode_mu(mu)
 
 
 class WanVaeLatentBridge(nn.Module):
