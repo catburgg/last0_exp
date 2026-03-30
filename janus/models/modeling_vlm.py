@@ -341,7 +341,7 @@ class MultiModalityCausalLM(MultiModalityPreTrainedModel):
             if load_cosmos_tokenizer:
                 cosmos_ckpt_dir = os.environ.get(
                     "COSMOS_TOKENIZER_DIR",
-                    "/mnt/dataset/share_code/hf_cache/Cosmos-0.1-Tokenizer-CI8x8",
+                    "/mnt/wfm/ckpt/ckpt/pretrained/Cosmos-Tokenizer-CI8x8",
                 )
                 self.cosmos_tokenizer = ImageTokenizer(
                     checkpoint_enc=f"{cosmos_ckpt_dir}/encoder.jit",
@@ -388,6 +388,7 @@ class MultiModalityCausalLM(MultiModalityPreTrainedModel):
                 DitPatchVectorizerAttn,
                 DitPatchVectorizerAvgPool,
                 DitPatchVectorizerConv,
+                DitPatchVectorizerQueryStyle,
                 HIDDEN_DIM as DIT_DIM,
             )
             from janus.models.cosmos_tokenizer.wan_vae_lib import WanVAEEncoder
@@ -407,6 +408,8 @@ class MultiModalityCausalLM(MultiModalityPreTrainedModel):
             self.cosmos_dit = CosmosDiTEarlyExit(ckpt_path=dit_ckpt, num_blocks=dit_num_blocks)
             if dit_align_mode == "attn":
                 self.dit_patch_vectorizer = DitPatchVectorizerAttn()
+            elif dit_align_mode == "attn_query":
+                self.dit_patch_vectorizer = DitPatchVectorizerQueryStyle()
             elif dit_align_mode == "avg":
                 self.dit_patch_vectorizer = DitPatchVectorizerAvgPool()
             else:

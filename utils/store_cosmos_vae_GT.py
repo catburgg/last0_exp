@@ -95,9 +95,9 @@ def process_and_save_latents(
                     print(f"Error processing {img_path}: {e}")
 
 if __name__ == "__main__":
-    SRC_IMAGES_DIR = "/mnt/dataset/share_code/dataset/libero_training_data/libero_images"
-    TGT_LATENT_DIR = "/mnt/dataset/share_code/dataset/libero_training_data/cosmos_latent_GT"
-    TOKENIZER_DIR = "/mnt/dataset/share_code/hf_cache/Cosmos-0.1-Tokenizer-CI8x8"
+    SRC_IMAGES_DIR = "/mnt/wfm/ckpt/data/data_libero/libero_training_data/libero_images"
+    TGT_LATENT_DIR = "/mnt/wfm/ckpt/data/data_libero/libero_training_data/cosmos_latent_GT"
+    TOKENIZER_DIR = "/mnt/wfm/ckpt/ckpt/pretrained/Cosmos-Tokenizer-CI8x8"
     
     # 确保保存根目录已创建
     os.makedirs(TGT_LATENT_DIR, exist_ok=True)

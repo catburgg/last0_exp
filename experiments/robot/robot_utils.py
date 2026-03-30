@@ -1,5 +1,9 @@
 """Utils for evaluating robot policies in various environments."""
 
+# LIBERO eval (get_action): SigLIP via prepare_inputs_embeds, optional autoregressive latent
+# <|latent_pad|> fill, then forward_flow. wan_dit/cosmos_denoise checkpoints may load WAN/DiT
+# weights for state_dict compatibility; those modules are not used in this forward.
+
 import os
 import random
 import time
@@ -133,37 +137,39 @@ def get_action(
         torch.set_printoptions(profile="full")
 
         input_ids = input_ids.unsqueeze(0)
-        latent_indices = (input_ids == 100847).nonzero()
-        latent_lists = [[idx[1].item() for idx in latent_indices if idx[0] == i] for i in range(input_ids.shape[0])]
-        kv_cache_cot = None
-        next_compute_range = (0, latent_indices[:, 1].min().item())
+        latent_pad_id = vl_chat_processor.tokenizer.convert_tokens_to_ids("<|latent_pad|>")
+        if num_latent_tokens > 0:
+            latent_indices = (input_ids == latent_pad_id).nonzero()
+            latent_lists = [[idx[1].item() for idx in latent_indices if idx[0] == i] for i in range(input_ids.shape[0])]
+            kv_cache_cot = None
+            next_compute_range = (0, latent_indices[:, 1].min().item())
 
-        # inference for latent cot embeddings
-        for latent_i in range(num_latent_tokens):
-            curr_inputs_embeds = inputs_embeds[:, next_compute_range[0] : next_compute_range[1], :]
-            outputs = vl_gpt.language_model.model(
-                inputs_embeds=curr_inputs_embeds,
-                latent_indexes=torch.arange(0, curr_inputs_embeds.shape[1]).to(device),
-                action_indexes=torch.arange(0, 0).to(device),
-                use_latent=use_latent,
-                use_cache=True,
-                past_key_values=kv_cache_cot if latent_i!=0 else None # for kv cache
-            )
-            next_compute_range = (
-                next_compute_range[1],
-                (
-                    input_ids.shape[1]
-                    if latent_i + 1 >= num_latent_tokens
-                    else next_compute_range[1] + 1
-                ),
-            )
-            hidden_states = outputs[0][:, -1:, :]
-            assert hidden_states.shape[1] == 1
-            kv_cache_cot = outputs.past_key_values
-            for batch_idx, mask_list in enumerate(latent_lists):
-                if len(mask_list) > latent_i:
-                    token_idx = mask_list[latent_i]
-                    inputs_embeds[batch_idx, token_idx, :] = hidden_states[batch_idx, 0, :]
+            # inference for latent cot embeddings
+            for latent_i in range(num_latent_tokens):
+                curr_inputs_embeds = inputs_embeds[:, next_compute_range[0] : next_compute_range[1], :]
+                outputs = vl_gpt.language_model.model(
+                    inputs_embeds=curr_inputs_embeds,
+                    latent_indexes=torch.arange(0, curr_inputs_embeds.shape[1]).to(device),
+                    action_indexes=torch.arange(0, 0).to(device),
+                    use_latent=use_latent,
+                    use_cache=True,
+                    past_key_values=kv_cache_cot if latent_i!=0 else None # for kv cache
+                )
+                next_compute_range = (
+                    next_compute_range[1],
+                    (
+                        input_ids.shape[1]
+                        if latent_i + 1 >= num_latent_tokens
+                        else next_compute_range[1] + 1
+                    ),
+                )
+                hidden_states = outputs[0][:, -1:, :]
+                assert hidden_states.shape[1] == 1
+                kv_cache_cot = outputs.past_key_values
+                for batch_idx, mask_list in enumerate(latent_lists):
+                    if len(mask_list) > latent_i:
+                        token_idx = mask_list[latent_i]
+                        inputs_embeds[batch_idx, token_idx, :] = hidden_states[batch_idx, 0, :]
 
         noise = torch.randn(inputs_embeds.shape[0], cfg.num_open_loop_steps, 7, device=device)
         samples = vl_gpt.forward_flow(inputs_embeds, noise)

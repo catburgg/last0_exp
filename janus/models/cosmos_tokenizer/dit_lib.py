@@ -727,16 +727,17 @@ class CosmosDiTFullHead(nn.Module):
 
 class CosmosDiTEarlyExit(nn.Module):
     """
-    Loads the first ``num_blocks`` transformer blocks of Cosmos-Policy DiT (indices 0 .. num_blocks-1).
-    All parameters are frozen. No transformer_engine dependency.
+    Loads patch embed + the first ``num_blocks`` transformer blocks (indices 0 .. num_blocks-1).
+    If ``num_blocks == 0``, only patch embed + timestep embed run (no DiT blocks). All parameters
+    are frozen. No transformer_engine dependency.
     """
 
     def __init__(self, ckpt_path: str, num_blocks: int = DEFAULT_NUM_DIT_BLOCKS,
                  device: str = "cpu"):
         super().__init__()
-        if not (1 <= num_blocks <= NUM_DIT_BLOCKS):
+        if not (0 <= num_blocks <= NUM_DIT_BLOCKS):
             raise ValueError(
-                f"num_blocks must be in [1, {NUM_DIT_BLOCKS}], got {num_blocks}"
+                f"num_blocks must be in [0, {NUM_DIT_BLOCKS}], got {num_blocks}"
             )
         self.num_blocks = num_blocks
 
@@ -936,6 +937,44 @@ class DitPatchVectorizerAttn(nn.Module):
         seq = x.reshape(b, -1, d)
         q = self.query.expand(b, -1, -1)
         out, _ = self.mha(q, seq, seq, need_weights=False)
+        return out.squeeze(1)
+
+
+class DitPatchVectorizerQueryStyle(nn.Module):
+    """
+    Query-branch style stack: pre_mlp → cross-attn (learnable query) → GELU → post_mlp → (B, D).
+
+    Mirrors ``LatentDownsampleCrossAttn`` on the remote ``query`` branch (pre → MHA → post_act →
+    post_mlp); last linear is D→D so outputs stay in DiT feature space for ``dit_gt_to_llm`` / sim_loss.
+    """
+
+    def __init__(self, dim: int = HIDDEN_DIM, num_heads: int = NUM_HEADS):
+        super().__init__()
+        self.pre_mlp = nn.Sequential(
+            nn.Linear(dim, dim),
+            nn.GELU(),
+            nn.Linear(dim, dim),
+        )
+        self.query_token = nn.Parameter(torch.zeros(1, 1, dim))
+        self.cross_attn = nn.MultiheadAttention(
+            dim, num_heads, batch_first=True, dropout=0.0
+        )
+        self.post_act = nn.GELU()
+        self.post_mlp = nn.Sequential(
+            nn.Linear(dim, dim),
+            nn.GELU(),
+            nn.Linear(dim, dim),
+        )
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        # x: (B, Hp, Wp, D)
+        b, _, _, d = x.shape
+        kv = x.reshape(b, -1, d)
+        kv = self.pre_mlp(kv)
+        q = self.query_token.expand(b, -1, -1)
+        out, _ = self.cross_attn(q, kv, kv, need_weights=False)
+        out = self.post_act(out)
+        out = self.post_mlp(out)
         return out.squeeze(1)
 
 

@@ -73,7 +73,7 @@ def probe_cosmos_scale_factor(latent_size: int, num_frames: int) -> int:
     target_side = infer_latent_side(latent_size, num_frames)
     cosmos_ckpt_dir = os.environ.get(
         "COSMOS_TOKENIZER_DIR",
-        "/mnt/dataset/share_code/hf_cache/Cosmos-0.1-Tokenizer-CI8x8",
+        "/mnt/wfm/ckpt/ckpt/pretrained/Cosmos-Tokenizer-CI8x8",
     )
     tokenizer = ImageTokenizer(
         checkpoint_enc=f"{cosmos_ckpt_dir}/encoder.jit",

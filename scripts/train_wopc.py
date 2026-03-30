@@ -459,7 +459,7 @@ def train(args: argparse.Namespace) -> None:
 
         cosmos_ckpt_dir = os.environ.get(
             "COSMOS_TOKENIZER_DIR",
-            "/mnt/dataset/share_code/hf_cache/Cosmos-0.1-Tokenizer-CI8x8",
+            "/mnt/wfm/ckpt/ckpt/pretrained/Cosmos-Tokenizer-CI8x8",
         )
         probe_tokenizer = ImageTokenizer(
             checkpoint_enc=f"{cosmos_ckpt_dir}/encoder.jit",
@@ -619,12 +619,15 @@ def train(args: argparse.Namespace) -> None:
             DitPatchVectorizerAttn,
             DitPatchVectorizerAvgPool,
             DitPatchVectorizerConv,
+            DitPatchVectorizerQueryStyle,
             HIDDEN_DIM as DIT_DIM,
         )
 
         hs = model.language_model.config.hidden_size
         if args.dit_align_mode == "attn":
             model.dit_patch_vectorizer = DitPatchVectorizerAttn().to(dtype=torch.bfloat16)
+        elif args.dit_align_mode == "attn_query":
+            model.dit_patch_vectorizer = DitPatchVectorizerQueryStyle().to(dtype=torch.bfloat16)
         elif args.dit_align_mode == "avg":
             model.dit_patch_vectorizer = DitPatchVectorizerAvgPool().to(dtype=torch.bfloat16)
         else:
@@ -648,6 +651,9 @@ def train(args: argparse.Namespace) -> None:
                     for p in m.parameters():
                         if p.dim() > 1:
                             nn.init.xavier_uniform_(p)
+        for name, param in model.named_parameters():
+            if name.startswith("dit_patch_vectorizer") and "query_token" in name:
+                nn.init.normal_(param.data, std=0.02)
 
     elif args.vision_backend == "cosmos_denoise":
         from janus.models.cosmos_tokenizer.dit_lib import (
@@ -1207,14 +1213,14 @@ if __name__ == '__main__':
         '--dit_align_mode',
         type=str,
         default='conv',
-        choices=['conv', 'attn', 'avg'],
-        help='wan_dit only: aggregate DiT patch grid (B,H,W,D) to (B,D); avg = global mean over H,W',
+        choices=['conv', 'attn', 'attn_query', 'avg'],
+        help='wan_dit only: aggregate DiT patch grid (B,H,W,D) to (B,D); attn_query = query-branch pre/post stack; avg = global mean over H,W',
     )
     parser.add_argument(
         '--dit_num_blocks',
         type=int,
         default=11,
-        help='wan_dit only: number of DiT blocks to run (uses block indices 0..dit_num_blocks-1); Libero ckpt has 28',
+        help='wan_dit only: number of DiT blocks after patch embed (0 = patch embed only, no blocks; else 0..dit_num_blocks-1); ckpt has 28',
     )
     parser.add_argument('--latent_downsample_mode', type=str, default='single', choices=['single', 'stacked'])
     parser.add_argument('--recon_mode', type=str, default='latent', choices=['latent', 'pixel'])

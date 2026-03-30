@@ -88,7 +88,7 @@ class GenerateConfig:
     use_proprio: bool = False                        # Whether to include proprio state in input
     latent_size: int = 16                             # Number of latent steps
     use_latent: bool = True                         # Whether to use latent
-    vision_backend: str = "cosmos_vae"              # {"cosmos_vae","siglip"}; controls encoder choice
+    vision_backend: str = "cosmos_vae"              # cosmos_vae, siglip, wan_dit, cosmos_denoise; must match checkpoint
 
     center_crop: bool = False                         # Center crop? (if trained w/ random crop image aug)
     num_open_loop_steps: int = NUM_ACTIONS_CHUNK      # Number of actions to execute open-loop before requerying policy
@@ -122,6 +122,15 @@ class GenerateConfig:
     cuda: str = "0"                                  # CUDA device to use
     denoise_steps: int = 10                          # Number of denoising steps
 
+    # Optional overrides for from_pretrained (wan_dit / cosmos_denoise checkpoints).
+    # Default None = do not pass; HF uses values from saved config (same as before this field existed).
+    dit_num_blocks: Optional[int] = None
+    dit_align_mode: Optional[str] = None             # "conv" | "attn" | "attn_query" | "avg" (wan_dit)
+    wan_vae_path: Optional[str] = None
+    cosmos_dit_path: Optional[str] = None
+    # Training-time sigma for cosmos_denoise; not passed to model __init__ (docs / CLI alignment only).
+    cosmos_denoise_sigma: float = 0.5
+
     # fmt: on
 
 
@@ -141,11 +150,29 @@ def model_load(cfg: GenerateConfig):
     vl_chat_processor: VLChatProcessor = VLChatProcessor.from_pretrained(cfg.pretrained_checkpoint)
     tokenizer = vl_chat_processor.tokenizer
     fast_image_num = 1 if cfg.use_wrist_camera else 0
-    vl_gpt: MultiModalityCausalLM = AutoModelForCausalLM.from_pretrained(
-        cfg.pretrained_checkpoint, trust_remote_code=True, torch_dtype=torch.bfloat16, use_latent = cfg.use_latent,
+    load_kw: dict = dict(
+        trust_remote_code=True,
+        torch_dtype=torch.bfloat16,
+        use_latent=cfg.use_latent,
         vision_backend=cfg.vision_backend,
-        flow=True, action_dim=7, fast_and_slow=True, fast_image_num=fast_image_num, action_chunk=cfg.num_open_loop_steps,
+        flow=True,
+        action_dim=7,
+        fast_and_slow=True,
+        fast_image_num=fast_image_num,
+        action_chunk=cfg.num_open_loop_steps,
         load_cosmos_tokenizer=False,
+    )
+    if cfg.dit_num_blocks is not None:
+        load_kw["dit_num_blocks"] = cfg.dit_num_blocks
+    if cfg.dit_align_mode is not None:
+        load_kw["dit_align_mode"] = cfg.dit_align_mode
+    if cfg.wan_vae_path is not None:
+        load_kw["wan_vae_path"] = cfg.wan_vae_path
+    if cfg.cosmos_dit_path is not None:
+        load_kw["cosmos_dit_path"] = cfg.cosmos_dit_path
+    vl_gpt: MultiModalityCausalLM = AutoModelForCausalLM.from_pretrained(
+        cfg.pretrained_checkpoint,
+        **load_kw,
     )
     action_tokenizer = ActionTokenizer(tokenizer)
 
