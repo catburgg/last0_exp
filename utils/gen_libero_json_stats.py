@@ -238,18 +238,18 @@ def cal_stats(jsonl_filename):
 
 ######## ---------main---------- #########
 
-data_root = "/mnt/dataset/share_code/hf_cache/libero_npy"
-img_save_root = "/mnt/dataset/share_code/dataset/libero_training_data/libero_images"
-json_save_root = "/mnt/dataset/share_code/dataset/libero_training_data/libero_json"
+data_root = "/mnt/wfm/ckpt/data/data_libero/libero_npy"
+img_save_root = "/mnt/wfm/ckpt/data/data_libero/libero_training_data/libero_images"
+json_save_root = "/mnt/wfm/ckpt/data/data_libero/libero_training_data/libero_json"
 
 if not os.path.exists(json_save_root):
     os.makedirs(json_save_root, exist_ok=True)
 
 task_lists = [
 #   'libero_spatial_no_noops',
-  'libero_goal_no_noops',
+#   'libero_goal_no_noops',
   'libero_object_no_noops',
-  'libero_10_no_noops'
+#   'libero_10_no_noops'
 ]
 
 # 遍历每一个 task，分别为它们生成单独的 json 记录

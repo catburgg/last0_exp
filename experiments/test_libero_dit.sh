@@ -25,7 +25,7 @@ fi
 
 # Launch LIBERO evals (wan_dit / cosmos_denoise checkpoint — edit pretrained_checkpoint to your run)
 python experiments/robot/libero/run_libero_eval.py \
-  --pretrained_checkpoint /mnt/wfm/ckpt/ckpt/last0_exp/libero_spatial_ablation/libero_spatial_dit_attn_query_style/checkpoint-79-66240/tfmr \
+  --pretrained_checkpoint /mnt/wfm/ckpt/ckpt/last0_exp/libero_spatial_ablation/libero_spatial_dit_conv/checkpoint-59-49680/tfmr \
   --task_suite_name libero_spatial \
   --cuda "0" \
   --vision_backend wan_dit \
@@ -34,7 +34,7 @@ python experiments/robot/libero/run_libero_eval.py \
   --save_videos False \
   --seed 0 \
   --dit_num_blocks 11 \
-  --dit_align_mode attn_query
+  --dit_align_mode conv
 
 # cosmos_denoise: use --vision_backend cosmos_denoise --dit_num_blocks 28 --cosmos_denoise_sigma 0.5
 # Optional if paths differ from saved config:

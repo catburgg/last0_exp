@@ -7,7 +7,8 @@ import sys
 # Do not add .../last0_exp/transformers alone: deepspeed.py there would shadow the DeepSpeed library.
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 REPO_ROOT = os.path.dirname(SCRIPT_DIR)
-for _p in (REPO_ROOT, SCRIPT_DIR):
+SCRIPTS_DIR = os.path.join(REPO_ROOT, "scripts")
+for _p in (REPO_ROOT, SCRIPTS_DIR):
     if _p not in sys.path:
         sys.path.insert(0, _p)
 

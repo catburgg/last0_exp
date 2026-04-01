@@ -9,7 +9,7 @@ if [[ -f "${_LAST0}/source_cuda_ld_path.sh" ]]; then
 fi
 PYTHON_BIN="${PYTHON_BIN:-${_LAST0}/bin/python}"
 
-cd /mnt/wfm/code/zxh/last0_exp/scripts
+cd /mnt/wfm/code/zxh/last0_exp/visualization
 export CUDA_VISIBLE_DEVICES=1
 export COSMOS_TOKENIZER_DIR="${COSMOS_TOKENIZER_DIR:-/mnt/wfm/ckpt/ckpt/pretrained/Cosmos-Tokenizer-CI8x8}"
 "$PYTHON_BIN" visualize_latent_recon.py \

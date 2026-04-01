@@ -25,11 +25,11 @@ fi
 
 # Launch LIBERO evals
 python experiments/robot/libero/run_libero_eval.py \
-  --pretrained_checkpoint /mnt/wfm/ckpt/ckpt/last0_exp/libero_spatial_ablation/pure_latent_recon_ls4_stacked/checkpoint-79-66240/tfmr \
+  --pretrained_checkpoint /mnt/wfm/ckpt/ckpt/last0_exp/libero_spatial_ablation/pure_latent_recon_ls64/checkpoint-59-49680/tfmr \
   --task_suite_name libero_spatial \
   --cuda "0" \
   --vision_backend cosmos_vae \
-  --latent_size 4 \
+  --latent_size 64 \
   --num_open_loop_steps 8 \
   --save_videos False \
   --seed 0

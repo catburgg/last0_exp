@@ -979,10 +979,24 @@ class DitPatchVectorizerQueryStyle(nn.Module):
 
 
 class DitPatchVectorizerAvgPool(nn.Module):
-    """(B, Hp, Wp, D) → (B, D) via mean over spatial dims (global average pooling)."""
+    """Spatial average pooling over DiT patch grid.
 
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        return x.mean(dim=(1, 2))
+    - ``grid_h == grid_w == 1``: global average → ``(B, D)`` (legacy).
+    - Otherwise: ``adaptive_avg_pool2d`` to ``(grid_h, grid_w)`` → ``(B, grid_h*grid_w, D)``.
+    """
+
+    def forward(
+        self,
+        x: torch.Tensor,
+        grid_h: int = 1,
+        grid_w: int = 1,
+    ) -> torch.Tensor:
+        if grid_h == 1 and grid_w == 1:
+            return x.mean(dim=(1, 2))
+        x = x.permute(0, 3, 1, 2)
+        x = F.adaptive_avg_pool2d(x, (grid_h, grid_w))
+        x = x.permute(0, 2, 3, 1)
+        return x.reshape(x.shape[0], grid_h * grid_w, -1)
 
 
 # ---------------------------------------------------------------------------

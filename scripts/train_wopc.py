@@ -46,6 +46,40 @@ class VLChatProcessorOutput():
     def __len__(self):
         return len(self.input_ids)
 
+
+
+def load_cosmos_gt_dit_vec_batch(
+    cache_dir: str,
+    indices: List[int],
+    num_frames: int,
+    device: torch.device,
+    dtype: torch.dtype,
+) -> torch.Tensor:
+    """Load precomputed DiT pooled GT from ``wash_cosmos_dit_gt_cache.py``.
+
+    Expects ``{cache_dir}/gt_tensors/{index:08d}.pt`` (``dit_vec``: [num_frames, D]),
+    where *index* is the training JSON list row index (``record_id`` in ``manifest.json``).
+    """
+    gt_dir = os.path.join(cache_dir, "gt_tensors")
+    vecs: List[torch.Tensor] = []
+    for i in indices:
+        path_pt = os.path.join(gt_dir, f"{int(i):08d}.pt")
+        if not os.path.isfile(path_pt):
+            raise FileNotFoundError(f"cosmos_gt_cache missing: {path_pt}")
+        payload = torch.load(path_pt, map_location="cpu")
+        if "dit_vec" not in payload:
+            raise KeyError(f"cosmos_gt_cache: no dit_vec in {path_pt}")
+        dv = payload["dit_vec"]
+        if dv.dim() != 2 or int(dv.shape[0]) != int(num_frames):
+            raise ValueError(
+                f"cosmos_gt_cache {path_pt}: expected dit_vec [num_frames={num_frames}, D], got {tuple(dv.shape)}"
+            )
+        vecs.append(dv)
+    stacked = torch.stack(vecs, dim=0)
+    b, n, d = stacked.shape
+    return stacked.reshape(b * n, d).to(device=device, dtype=dtype)
+
+
 def get_custom_cosine_schedule_with_warmup(
     optimizer, 
     num_warmup_steps, 
@@ -208,7 +242,10 @@ class SftDataset(Dataset):
         return len(self.data)
 
     def __getitem__(self, index: int) -> Dict[str, torch.Tensor]:
-        return self.data[index]
+        row = self.data[index]
+        if getattr(self.config, "cosmos_gt_cache_dir", None) and self.config.vision_backend == "cosmos_denoise":
+            return {**row, "_gt_cache_idx": index}
+        return row
 
     def process_image(self,image_paths):
         images = [PIL.Image.open(image_path).convert("RGB") for image_path in image_paths]
@@ -372,7 +409,10 @@ class SftDataset(Dataset):
         if len(pre_data) > 0:
             prepare_inputs = self.processor.batchify(pre_data)
 
-        return {
+        use_gt_cache = bool(getattr(self.config, "cosmos_gt_cache_dir", None)) and getattr(
+            self.config, "vision_backend", None
+        ) == "cosmos_denoise"
+        out = {
             "input_ids": prepare_inputs.input_ids,
             "encoder_pixel_values": prepare_inputs.pixel_values.to(torch.bfloat16),
             "latent_pixel_values": latent_pixel_values,
@@ -386,6 +426,9 @@ class SftDataset(Dataset):
             "images_seq_mask": prepare_inputs['images_seq_mask'],
             "images_emb_mask": prepare_inputs['images_emb_mask'],
         }
+        if use_gt_cache:
+            out["gt_cache_idx"] = torch.tensor([x["_gt_cache_idx"] for x in batch], dtype=torch.long)
+        return out
 
 
 def save_checkpoint(
@@ -721,6 +764,24 @@ def train(args: argparse.Namespace) -> None:
     )
 
     train_dataset = SftDataset(args, processor, accelerator, model)
+    if args.cosmos_gt_cache_dir:
+        if args.vision_backend != "cosmos_denoise":
+            raise ValueError("cosmos_gt_cache_dir requires vision_backend=cosmos_denoise")
+        if not args.use_latent:
+            raise ValueError("cosmos_gt_cache_dir requires use_latent=1")
+        manifest_path = os.path.join(args.cosmos_gt_cache_dir, "manifest.json")
+        if os.path.isfile(manifest_path) and accelerator.is_main_process:
+            with open(manifest_path, "r", encoding="utf-8") as mf:
+                meta = json.load(mf)
+            accelerator.print(
+                f"[cosmos_gt_cache] manifest num_samples={meta.get('num_samples')} "
+                f"dit_num_blocks={meta.get('dit_num_blocks')} cosmos_k_steps={meta.get('cosmos_k_steps')}"
+            )
+            ns = meta.get("num_samples")
+            if ns is not None and ns != len(train_dataset):
+                accelerator.print(
+                    f"[cosmos_gt_cache] warn: manifest num_samples={ns} != dataset len={len(train_dataset)}"
+                )
     train_dataloader = DataLoader(
         train_dataset,
         batch_size=args.train_bsz_per_gpu,
@@ -793,8 +854,21 @@ def train(args: argparse.Namespace) -> None:
                 spatial = model.cosmos_dit.forward_spatial(mu.to(dit_wdtype), 0).squeeze(1)
                 _p = next(model.dit_patch_vectorizer.parameters(), None)
                 agg_dtype = _p.dtype if _p is not None else spatial.dtype
-                dit_vec_bn = model.dit_patch_vectorizer(spatial.to(agg_dtype))
-                compressed_latent_embeds = model.dit_gt_to_llm(dit_vec_bn).view(bs, num_frames, -1)
+                tpf = args.latent_size // num_frames
+                if tpf <= 1:
+                    gh, gw = 1, 1
+                else:
+                    r = math.isqrt(tpf)
+                    gh, gw = (r, r) if r * r == tpf else (1, tpf)
+                dit_vec_bn = model.dit_patch_vectorizer(spatial.to(agg_dtype), grid_h=gh, grid_w=gw)
+                d_dim = dit_vec_bn.shape[-1]
+                if dit_vec_bn.dim() == 2:
+                    compressed_latent_embeds = model.dit_gt_to_llm(dit_vec_bn).view(bs, num_frames, -1)
+                else:
+                    compressed_latent_embeds = (
+                        model.dit_gt_to_llm(dit_vec_bn.reshape(-1, d_dim)).view(bs, args.latent_size, -1)
+                    )
+                dit_vec_for_sim = dit_vec_bn.mean(dim=1) if dit_vec_bn.dim() == 3 else dit_vec_bn
 
                 latent_start_id = processor.tokenizer.convert_tokens_to_ids("<|latent_start|>")
                 latent_pad_id = processor.tokenizer.convert_tokens_to_ids("<|latent_pad|>")
@@ -840,7 +914,7 @@ def train(args: argparse.Namespace) -> None:
                     dit_out_proj=model.dit_out_proj,
                 )
                 sim_loss = 1.0 - F.cosine_similarity(
-                    pred_dit_features, dit_vec_bn.to(torch.float32), dim=-1
+                    pred_dit_features, dit_vec_for_sim.to(torch.float32), dim=-1
                 ).mean()
                 recon_loss = torch.tensor(0.0, device=sim_loss.device)
 
@@ -869,53 +943,63 @@ def train(args: argparse.Namespace) -> None:
             elif args.vision_backend == 'cosmos_denoise':
                 from janus.models.cosmos_tokenizer.dit_lib import build_dit_pred_features
 
-                sigma = float(args.cosmos_denoise_sigma)
                 bs = batch['latent_pixel_values'].shape[0]
                 num_frames = batch['latent_pixel_values'].shape[1]
-
-                # --- encode current frame (clean conditioning) ---
-                current_cosmos = convert_to_cosmos_input(
-                    batch['current_pixel_values'].float(), image_mean, image_std
-                )
-                current_240 = F.interpolate(
-                    current_cosmos, size=(240, 240), mode='bilinear', align_corners=False
-                ).unsqueeze(2)  # [B, 3, 1, 240, 240]
-                with torch.no_grad():
-                    current_latent = model.wan_vae.encode(current_240)
-                mu_current = current_latent[:, :8]  # [B, 8, 1, 30, 30]
-
-                # --- encode future frames ---
-                future_imgs = rearrange(batch['latent_pixel_values'], "b n c h w -> (b n) c h w")
-                future_cosmos = convert_to_cosmos_input(future_imgs.float(), image_mean, image_std)
-                future_240 = F.interpolate(
-                    future_cosmos, size=(240, 240), mode='bilinear', align_corners=False
-                ).unsqueeze(2)  # [B*N, 3, 1, 240, 240]
-                with torch.no_grad():
-                    future_latent = model.wan_vae.encode(future_240)
-                mu_future = future_latent[:, :8]  # [B*N, 8, 1, 30, 30]
-
-                epsilon = torch.randn_like(mu_future)
-                xt_future = sigma * epsilon + (1 - sigma) * mu_future  # [B*N, 8, 1, 30, 30]
-
-                # repeat current frame for each future frame, concat in T dim
-                # → [current_clean | noisy_future] per pair
-                mu_current_bn = mu_current.unsqueeze(1).expand(-1, num_frames, -1, -1, -1, -1)
-                mu_current_bn = rearrange(mu_current_bn, "b n c t h w -> (b n) c t h w")
-                xt_pair = torch.cat([mu_current_bn, xt_future], dim=2)  # [B*N, 8, 2, 30, 30]
-
-                # DiT forward → hidden state before final_layer
                 dit_wdtype = next(model.cosmos_dit.parameters()).dtype
-                with torch.no_grad():
-                    hidden = model.cosmos_dit.forward_hidden(
-                        xt_pair.to(dit_wdtype),
-                        num_blocks_run=args.dit_num_blocks,
-                        sigma=sigma,
-                    )  # [B*N, Tp=1, 15, 15, 2048]
 
-                assert hidden.shape == (bs * num_frames, 1, 15, 15, 2048), \
-                    f"unexpected hidden shape {hidden.shape}"
+                if args.cosmos_gt_cache_dir:
+                    dit_vec_bn = load_cosmos_gt_dit_vec_batch(
+                        args.cosmos_gt_cache_dir,
+                        batch["gt_cache_idx"].tolist(),
+                        num_frames,
+                        inputs_embeds.device,
+                        dit_wdtype,
+                    )
+                else:
+                    sigma = float(args.cosmos_denoise_sigma)
 
-                dit_vec_bn = hidden.mean(dim=[1, 2, 3])  # [B*N, 2048]
+                    # --- encode current frame (clean conditioning) ---
+                    current_cosmos = convert_to_cosmos_input(
+                        batch['current_pixel_values'].float(), image_mean, image_std
+                    )
+                    current_240 = F.interpolate(
+                        current_cosmos, size=(240, 240), mode='bilinear', align_corners=False
+                    ).unsqueeze(2)  # [B, 3, 1, 240, 240]
+                    with torch.no_grad():
+                        current_latent = model.wan_vae.encode(current_240)
+                    mu_current = current_latent[:, :8]  # [B, 8, 1, 30, 30]
+
+                    # --- encode future frames ---
+                    future_imgs = rearrange(batch['latent_pixel_values'], "b n c h w -> (b n) c h w")
+                    future_cosmos = convert_to_cosmos_input(future_imgs.float(), image_mean, image_std)
+                    future_240 = F.interpolate(
+                        future_cosmos, size=(240, 240), mode='bilinear', align_corners=False
+                    ).unsqueeze(2)  # [B*N, 3, 1, 240, 240]
+                    with torch.no_grad():
+                        future_latent = model.wan_vae.encode(future_240)
+                    mu_future = future_latent[:, :8]  # [B*N, 8, 1, 30, 30]
+
+                    epsilon = torch.randn_like(mu_future)
+                    xt_future = sigma * epsilon + (1 - sigma) * mu_future  # [B*N, 8, 1, 30, 30]
+
+                    # repeat current frame for each future frame, concat in T dim
+                    # → [current_clean | noisy_future] per pair
+                    mu_current_bn = mu_current.unsqueeze(1).expand(-1, num_frames, -1, -1, -1, -1)
+                    mu_current_bn = rearrange(mu_current_bn, "b n c t h w -> (b n) c t h w")
+                    xt_pair = torch.cat([mu_current_bn, xt_future], dim=2)  # [B*N, 8, 2, 30, 30]
+
+                    # DiT forward → hidden state before final_layer
+                    with torch.no_grad():
+                        hidden = model.cosmos_dit.forward_hidden(
+                            xt_pair.to(dit_wdtype),
+                            num_blocks_run=args.dit_num_blocks,
+                            sigma=sigma,
+                        )  # [B*N, Tp=1, 15, 15, 2048]
+
+                    assert hidden.shape == (bs * num_frames, 1, 15, 15, 2048), \
+                        f"unexpected hidden shape {hidden.shape}"
+
+                    dit_vec_bn = hidden.mean(dim=[1, 2, 3])  # [B*N, 2048]
                 compressed_latent_embeds = model.dit_gt_to_llm(dit_vec_bn).view(bs, num_frames, -1)
 
                 latent_start_id = processor.tokenizer.convert_tokens_to_ids("<|latent_start|>")
@@ -1203,46 +1287,29 @@ if __name__ == '__main__':
     parser.add_argument('--fast_view_num', type=int, default=1)
     parser.add_argument('--use_latent', type=int, default=1)
     parser.add_argument('--latent_size', type=int, default=4)
-    parser.add_argument(
-        '--vision_backend',
-        type=str,
-        default='cosmos_vae',
-        choices=['cosmos_vae', 'siglip', 'wan_dit', 'cosmos_denoise'],
-    )
-    parser.add_argument(
-        '--dit_align_mode',
-        type=str,
-        default='conv',
-        choices=['conv', 'attn', 'attn_query', 'avg'],
-        help='wan_dit only: aggregate DiT patch grid (B,H,W,D) to (B,D); attn_query = query-branch pre/post stack; avg = global mean over H,W',
-    )
-    parser.add_argument(
-        '--dit_num_blocks',
-        type=int,
-        default=11,
-        help='wan_dit only: number of DiT blocks after patch embed (0 = patch embed only, no blocks; else 0..dit_num_blocks-1); ckpt has 28',
-    )
+    parser.add_argument('--vision_backend', type=str, default='cosmos_vae', choices=['cosmos_vae', 'siglip', 'wan_dit', 'cosmos_denoise'])
+    parser.add_argument('--dit_align_mode', type=str, default='conv', choices=['conv', 'attn', 'attn_query', 'avg'])
+    parser.add_argument('--dit_num_blocks', type=int, default=11)
     parser.add_argument('--latent_downsample_mode', type=str, default='single', choices=['single', 'stacked'])
     parser.add_argument('--recon_mode', type=str, default='latent', choices=['latent', 'pixel'])
     parser.add_argument('--recon_weight', type=float, default=1.0)
     parser.add_argument('--sim_weight', type=float, default=1.0)
-    parser.add_argument(
-        '--action_loss_weight',
-        type=float,
-        default=1.0,
-        help='Flow-matching MSE on action head; set 0 to debug latent/sim only (still runs forwards for metrics).',
-    )
+    parser.add_argument('--action_loss_weight',type=float, default=1.0)
     parser.add_argument('--use_cosmos_dit', type=int, default=0,
                         help='Use Cosmos DiT early-exit hidden states as GT (0=off, 1=on)')
     parser.add_argument('--cosmos_dit_path', type=str, default=None,
                         help='Path to Cosmos-Policy DiT checkpoint .pt file')
     parser.add_argument('--wan_vae_path', type=str, default=None,
                         help='Path to WAN VAE tokenizer.pth (Cosmos-Predict2.5-2B)')
+    parser.add_argument('--cosmos_denoise_sigma', type=float, default=0.5)
     parser.add_argument(
-        '--cosmos_denoise_sigma',
-        type=float,
-        default=0.5,
-        help='cosmos_denoise only: σ in x_t = σ·ε + (1-σ)·μ and DiT forward_hidden sigma (default 0.5).',
+        '--cosmos_gt_cache_dir',
+        type=str,
+        default=None,
+        help=(
+            'Optional root dir from wash_cosmos_dit_gt_cache.py (contains gt_tensors/NNNNNNNN.pt). '
+            'Requires vision_backend=cosmos_denoise; index i matches JSON list row i.'
+        ),
     )
 
     args = parser.parse_args()

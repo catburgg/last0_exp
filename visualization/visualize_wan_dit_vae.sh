@@ -23,7 +23,7 @@ if [[ -f "${_LAST0}/source_cuda_ld_path.sh" ]]; then
 fi
 PYTHON_BIN="${PYTHON_BIN:-${_LAST0}/bin/python}"
 
-cd /mnt/wfm/code/zxh/last0_exp/scripts
+cd /mnt/wfm/code/zxh/last0_exp/visualization
 export PYTHONPATH="/mnt/wfm/code/zxh/last0_exp${PYTHONPATH:+:${PYTHONPATH}}"
 export CUDA_VISIBLE_DEVICES="${CUDA_VISIBLE_DEVICES:-1}"
 export WAN_VAE_PATH="${WAN_VAE_PATH:-/mnt/wfm/ckpt/ckpt/pretrained/Cosmos-Predict2.5-2B/tokenizer.pth}"
