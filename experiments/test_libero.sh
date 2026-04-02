@@ -28,16 +28,16 @@ unset PYOPENGL_PLATFORM
 export MUJOCO_GL=osmesa
 export PYOPENGL_PLATFORM=osmesa
 
-# export CUDA_VISIBLE_DEVICES=1 
+export CUDA_VISIBLE_DEVICES=1
 
-OUTPUT_DIR=/mnt/workspace/caojiajun/code/last0_exp/ckpt/libero_spatial_query_0323/test_output/checkpoint-79-66240
+OUTPUT_DIR=/mnt/workspace/caojiajun/code/last0_exp/ckpt/libero_object_query/libero_object_query_kd0.1_ls16/test_output/test
 mkdir -p $OUTPUT_DIR
 python experiments/robot/libero/run_libero_eval.py \
-  --pretrained_checkpoint /mnt/workspace/caojiajun/code/last0_exp/ckpt/libero_spatial_query_0323/libero_spatial_query/checkpoint-79-66240/tfmr \
-  --task_suite_name libero_spatial \
+  --pretrained_checkpoint /mnt/workspace/caojiajun/code/last0_exp/ckpt/libero_object_query/libero_object_query_kd0.1_ls16/checkpoint-9-10470/tfmr \
+  --task_suite_name libero_object \
   --cuda "0" \
   --vision_backend cosmos_vae \
-  --latent_size 4 \
+  --latent_size 16 \
   --num_open_loop_steps 8 \
   --save_videos False \
   --seed 0 \

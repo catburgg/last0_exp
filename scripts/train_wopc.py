@@ -106,60 +106,71 @@ def build_pred_latent_features(
     batch_size: int,
     num_frames: int,
     model,
+    tokens_per_frame: int = 1,
 ) -> torch.Tensor:
     """
-    inferred_embeddings_all: (B, N, hidden_size)  — 1 predicted token per frame
-    Returns: (B*N, vae_channels, vae_spatial, vae_spatial)
+    inferred_embeddings_all: (B, latent_size, hidden_size)
+        where latent_size = num_frames * tokens_per_frame
+    Returns: (B*num_frames, vae_channels, vae_spatial, vae_spatial)
     """
-    # Reshape to (B*N, 1, hidden_size) for cross-attn decompressor
-    latent_tokens = rearrange(inferred_embeddings_all, "b n d -> (b n) 1 d")
-    pred_latent = model.latent_decompressor(latent_tokens)   # (B*N, C, H, W)
+    # Group tokens_per_frame tokens together per frame before decompressing
+    latent_tokens = rearrange(
+        inferred_embeddings_all, "b (f k) d -> (b f) k d", f=num_frames, k=tokens_per_frame
+    )
+    pred_latent = model.latent_decompressor(latent_tokens)   # (B*num_frames, C, H, W)
     return pred_latent
 
 
 class TrainingMetrics:
     def __init__(self, device):
         self.n_step = 0
-        self.action_total = torch.Tensor([0]).to(device=device)
+        self.total_loss = torch.Tensor([0]).to(device=device)
         self.action_loss = torch.Tensor([0]).to(device=device)
         self.sim_loss = torch.Tensor([0]).to(device=device)
         self.recon_loss = torch.Tensor([0]).to(device=device)
         self.world_size = dist.get_world_size()
 
-    def __call__(self, action_loss, sim_loss, recon_loss=None):
-        return self.update(action_loss, sim_loss, recon_loss)
+    def __call__(self, total_loss, action_loss, sim_loss, recon_loss=None):
+        return self.update(total_loss, action_loss, sim_loss, recon_loss)
 
-    def update(self, action_loss, sim_loss, recon_loss=None):
+    def update(self, total_loss, action_loss, sim_loss, recon_loss=None):
         self.n_step += 1
         with torch.no_grad():
+            self.total_loss += total_loss.item()
             self.action_loss += action_loss.item()
             self.sim_loss += sim_loss.item()
             if recon_loss is not None:
                 self.recon_loss += recon_loss.item()
 
     def get_metric(self, reset=True):
+        dist.all_reduce(self.total_loss, op=torch.distributed.ReduceOp.SUM)
         dist.all_reduce(self.action_loss, op=torch.distributed.ReduceOp.SUM)
         dist.all_reduce(self.sim_loss, op=torch.distributed.ReduceOp.SUM)
         dist.all_reduce(self.recon_loss, op=torch.distributed.ReduceOp.SUM)
 
+        total_loss = self.total_loss.item() / (self.world_size * self.n_step)
         action_loss = self.action_loss.item() / (self.world_size * self.n_step)
         sim_loss = self.sim_loss.item() / (self.world_size * self.n_step)
         recon_loss = self.recon_loss.item() / (self.world_size * self.n_step)
 
         if reset:
             self.n_step = 0
+            self.total_loss.fill_(0)
             self.action_loss.fill_(0)
             self.sim_loss.fill_(0)
             self.recon_loss.fill_(0)
-        return action_loss, sim_loss, recon_loss
+        return total_loss, action_loss, sim_loss, recon_loss
 
     def get_metric_action(self, reset=True):
+        dist.all_reduce(self.total_loss, op=torch.distributed.ReduceOp.SUM)
         dist.all_reduce(self.action_loss, op=torch.distributed.ReduceOp.SUM)
+        total_loss = self.total_loss.item() / (self.world_size * self.n_step)
         action_loss = self.action_loss.item() / (self.world_size * self.n_step)
         if reset:
             self.n_step = 0
+            self.total_loss.fill_(0)
             self.action_loss.fill_(0)
-        return action_loss, 0.0, 0.0
+        return total_loss, action_loss, 0.0, 0.0
 
 
 class SftDataset(Dataset):
@@ -447,6 +458,7 @@ def train(args: argparse.Namespace) -> None:
     else:
         cosmos_side = None
 
+    latent_n_query = args.latent_size // 4   # tokens per frame = latent_size / num_frames (num_frames hardcoded to 4)
     model = AutoModelForCausalLM.from_pretrained(
         args.pretrain_path,
         trust_remote_code=True,
@@ -458,6 +470,7 @@ def train(args: argparse.Namespace) -> None:
         use_latent=args.use_latent,
         vision_backend=args.vision_backend,
         cosmos_side=cosmos_side,
+        latent_n_query=latent_n_query,
         ignore_mismatched_sizes=True,
     )
     if args.vision_backend == 'cosmos_vae':
@@ -622,10 +635,10 @@ def train(args: argparse.Namespace) -> None:
 
                 comp_dtype = next(model.latent_compressor.parameters()).dtype
                 gt_latent_for_comp = gt_latent_features.to(comp_dtype)
-                # Cross-attn compress: (B*N, C, H, W) -> (B*N, 1, hidden_size)
+                # Cross-attn compress: (B*num_frames, C, H, W) -> (B*num_frames, latent_n_query, hidden_size)
                 compressed_tokens = model.latent_compressor(gt_latent_for_comp)
-                # Stack frames: (B*N, 1, H) -> (B, N, H)
-                compressed_latent_embeds = rearrange(compressed_tokens, "(b n) 1 d -> b n d", b=bs, n=num_frames)
+                # Merge frame and per-frame tokens: (B*num_frames, latent_n_query, H) -> (B, num_frames*latent_n_query, H)
+                compressed_latent_embeds = rearrange(compressed_tokens, "(b n) k d -> b (n k) d", b=bs, n=num_frames)
                 compressed_latent_embeds = compressed_latent_embeds.to(inputs_embeds.dtype)
                 
                 pad_mask = (batch['input_ids'] == latent_pad_id)
@@ -694,6 +707,7 @@ def train(args: argparse.Namespace) -> None:
                     batch_size=bs,
                     num_frames=num_frames,
                     model=model,
+                    tokens_per_frame=latent_n_query,
                 )
                 gt_latent_features = gt_latent_features.to(torch.float32)
                 pred_latent_features = pred_latent_features.to(torch.float32)
@@ -750,7 +764,7 @@ def train(args: argparse.Namespace) -> None:
                 predicted_noise = model.final_layer(hidden_states)[:, -(batch['target'].shape[1]):, :] # the last token is noise
                 action_loss = nn.MSELoss()(predicted_noise, batch['target'].to(predicted_noise.dtype))
                 loss = args.sim_weight * sim_loss + action_loss + args.recon_weight * recon_loss
-                metric(action_loss, sim_loss, recon_loss)
+                metric(loss, action_loss, sim_loss, recon_loss)
             else:
                 latent_indexes=torch.arange(0, 0).to(inputs_embeds.device)
                 action_indexes=torch.arange(0, inputs_embeds.shape[1]).to(inputs_embeds.device)
@@ -769,7 +783,7 @@ def train(args: argparse.Namespace) -> None:
                 action_loss = nn.MSELoss()(predicted_noise, batch['target'].to(predicted_noise.dtype))
                 loss = action_loss
                 sim_loss = torch.tensor(0.0).to(action_loss.device)
-                metric(action_loss, sim_loss, torch.tensor(0.0).to(action_loss.device))
+                metric(loss, action_loss, sim_loss, torch.tensor(0.0).to(action_loss.device))
 
             accelerator.backward(loss)
             if (global_step + 1) % accelerator.gradient_accumulation_steps == 0:
@@ -780,7 +794,7 @@ def train(args: argparse.Namespace) -> None:
                 lr_scheduler.step()
                 optimizer.zero_grad()
 
-                action_loss, sim_loss, recon_loss = metric.get_metric() if args.use_latent else metric.get_metric_action()
+                total_loss, action_loss, sim_loss, recon_loss = metric.get_metric() if args.use_latent else metric.get_metric_action()
                 if accelerator.is_main_process:
                     train_iter.set_postfix(
                         epoch=epoch,
@@ -788,12 +802,14 @@ def train(args: argparse.Namespace) -> None:
                         total_steps=len(train_dataloader),
                         skip=accelerator.optimizer_step_was_skipped,
                         length=len(batch["input_ids"][0]),
+                        total_loss=f"{total_loss:.6f}",
                         action_loss=f"{action_loss:.6f}",
                         sim_loss=f"{sim_loss:.6f}",
                         recon_loss=f"{recon_loss:.6f}",
                         lr=f"{lr_scheduler.get_last_lr()[0]:.2e}"
                     )
                     wandb.log({
+                        'total_loss': total_loss,
                         'action_loss': action_loss,
                         'sim_loss': sim_loss,
                         'recon_loss': recon_loss,
@@ -871,11 +887,6 @@ if __name__ == '__main__':
 
     args = parser.parse_args()
 
-    # Set paths
-    args.log_dir = os.path.join(args.log_dir, args.experiment_name)
-    args.output_dir = os.path.join(args.output_dir, args.experiment_name)
-    if args.run_name:
-        args.output_dir = os.path.join(args.output_dir, args.run_name)
 
     os.makedirs(args.log_dir, exist_ok=True)
     os.makedirs(args.output_dir, exist_ok=True)

@@ -77,12 +77,13 @@ def model_name_to_cls(cls_name):
 
 class LatentDownsampleCrossAttn(nn.Module):
     """
-    Compresses a VAE latent map (B*N, C, H, W) into 1 token per frame (B*N, 1, hidden_size).
+    Compresses a VAE latent map (B*N, C, H, W) into n_query tokens per frame
+    (B*N, n_query, hidden_size).
 
     Pipeline:
       1. Reshape gt_latent to (B*N, C, H*W) — C key/value tokens of dim kv_dim=H*W
       2. pre_mlp  : 2-layer MLP applied to each kv token  (kv_dim → kv_dim)
-      3. cross_attn: learnable query (1, kv_dim) attends to the C processed kv tokens
+      3. cross_attn: n_query learnable queries (n_query, kv_dim) attend to the C processed kv tokens
       4. post_act + post_mlp: GELU + 2-layer MLP  (kv_dim → hidden_size)
 
     Dimensions (default Cosmos CI8x8 + 256x256):
@@ -94,10 +95,11 @@ class LatentDownsampleCrossAttn(nn.Module):
         vae_spatial: int,
         hidden_size: int,
         num_heads: int = 8,
+        n_query: int = 1,
     ):
         super().__init__()
         kv_dim = vae_spatial * vae_spatial          # 32*32 = 1024
-        self.query_token = nn.Parameter(torch.zeros(1, 1, kv_dim))
+        self.query_token = nn.Parameter(torch.zeros(1, n_query, kv_dim))
         self.pre_mlp = nn.Sequential(
             nn.Linear(kv_dim, kv_dim),
             nn.GELU(),
@@ -118,10 +120,10 @@ class LatentDownsampleCrossAttn(nn.Module):
         bn, c, h, w = gt_latent.shape
         kv = gt_latent.reshape(bn, c, h * w)              # (B*N, C, kv_dim)
         kv = self.pre_mlp(kv)                             # (B*N, C, kv_dim)
-        q = self.query_token.expand(bn, -1, -1)           # (B*N, 1, kv_dim)
-        out, _ = self.cross_attn(q, kv, kv)               # (B*N, 1, kv_dim)
+        q = self.query_token.expand(bn, -1, -1)           # (B*N, n_query, kv_dim)
+        out, _ = self.cross_attn(q, kv, kv)               # (B*N, n_query, kv_dim)
         out = self.post_act(out)
-        out = self.post_mlp(out)                           # (B*N, 1, hidden_size)
+        out = self.post_mlp(out)                           # (B*N, n_query, hidden_size)
         return out
 
 
@@ -168,7 +170,7 @@ class LatentUpsampleCrossAttn(nn.Module):
         self.vae_spatial = vae_spatial
 
     def forward(self, latent_token: torch.Tensor) -> torch.Tensor:
-        # latent_token: (B*N, 1, hidden_size)
+        # latent_token: (B*N, tokens_per_frame, hidden_size)
         bn = latent_token.shape[0]
         kv = self.pre_mlp(latent_token)                              # (B*N, 1, hidden_size)
         q = self.query_tokens.expand(bn, -1, -1)                    # (B*N, n_q, hidden_size)
@@ -339,6 +341,7 @@ class MultiModalityCausalLM(MultiModalityPreTrainedModel):
                 cosmos_side = None,           # spatial side of Cosmos VAE output (e.g. 32 for CI8x8 + 256x256)
                 load_cosmos_tokenizer = True,
                 latent_downsample_mode: str = "cross_attn",  # kept for compat, always cross_attn
+                latent_n_query: int = 1,  # number of query tokens per frame in compressor; caller should pass latent_size // num_frames
             ):
         super().__init__(config)
         if cosmos_side is not None:
@@ -424,6 +427,7 @@ class MultiModalityCausalLM(MultiModalityPreTrainedModel):
                 vae_channels=vae_dim,
                 vae_spatial=_cosmos_side,
                 hidden_size=hidden_size,
+                n_query=latent_n_query,
             )
             self.latent_decompressor = LatentUpsampleCrossAttn(
                 hidden_size=hidden_size,

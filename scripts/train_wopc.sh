@@ -25,11 +25,11 @@ NODE_RANK=${RANK:-0}
 TOTAL_PROCESSES=$((GPUS_PER_NODE * NNODES))
 echo ">>> ACCELERATE multi-node: num_processes=${TOTAL_PROCESSES} num_machines=${NNODES} machine_rank=${NODE_RANK} main_process_ip=${MASTER_ADDR} main_process_port=${MASTER_PORT}"
 
-BASE_RUN_NAME="libero_spatial_query"
-EXPERIMENT_NAME="libero_spatial_query_0325"
-OUTPUT_ROOT_DIR="../ckpt"
+BASE_RUN_NAME="libero_goal_query_kd0.1_ls16"
+EXPERIMENT_NAME="libero_goal_query"
+OUTPUT_ROOT_DIR="../ckpt/${EXPERIMENT_NAME}/${BASE_RUN_NAME}"
 
-DATA_JSON="/mnt/dataset/share/hwb/dataset/libero_training_data/libero_json/libero_spatial_no_noops_view2_chunk4_16_stride8_fast1_sparse_fastslow_train.json"
+DATA_JSON="/mnt/dataset/share/hwb/dataset/libero_training_data/libero_json/libero_goal_no_noops_view2_chunk4_16_stride8_fast1_sparse_fastslow_train.json"
 PRETRAIN_PATH="/mnt/dataset/share/hwb/hf_cache/Janus-Pro-1B"
 PRETRAIN_ACTION_PATH="/mnt/dataset/share/hwb/hf_cache/LaST0_Pretrain_AE_chunk8/tfmr"
 COSMOS_TOKENIZER_DIR="/mnt/dataset/share/hwb/hf_cache/Cosmos-0.1-Tokenizer-CI8x8"
@@ -52,8 +52,8 @@ accelerate launch --config_file ../config/sft.yaml \
     --pretrain_action_path ${PRETRAIN_ACTION_PATH} \
     --data_path ${DATA_JSON} \
     --data_root "" \
-    --n_epochs 20 \
-    --save_freq 5 \
+    --n_epochs 100 \
+    --save_freq 10 \
     --action_dim 7 \
     --action_chunk 8 \
     --train_bsz_per_gpu ${TRAIN_BSZ} \
@@ -67,12 +67,13 @@ accelerate launch --config_file ../config/sft.yaml \
     --load_action_from_latent 0 \
     --load_action_from_pretrain 1 \
     --use_latent 1 \
-    --latent_size 4 \
+    --latent_size 16 \
     --latent_downsample_mode cross_attn \
     --recon_mode latent \
     --recon_weight 0.0 \
-    --sim_weight 1.0 \
+    --sim_weight 0.1 \
     --run_name ${BASE_RUN_NAME} \
-    --cosmos_tokenizer_dir ${COSMOS_TOKENIZER_DIR}
+    --cosmos_tokenizer_dir ${COSMOS_TOKENIZER_DIR} \
+    --max_ckpts 0
 
 echo ">>> Exp5 Finished."

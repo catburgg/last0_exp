@@ -146,6 +146,7 @@ def model_load(cfg: GenerateConfig):
         vision_backend=cfg.vision_backend,
         flow=True, action_dim=7, fast_and_slow=True, fast_image_num=fast_image_num, action_chunk=cfg.num_open_loop_steps,
         load_cosmos_tokenizer=False,
+        latent_n_query=cfg.latent_size // 4,
     )
     action_tokenizer = ActionTokenizer(tokenizer)
 
