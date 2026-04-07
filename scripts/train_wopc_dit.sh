@@ -1,7 +1,5 @@
 #!/bin/bash
-# DiT Early-Exit pipeline: WAN VAE + Cosmos-Predict2.5 DiT (vision_backend=wan_dit).
-# tokenizer.pth and model.pt are the matched pair; no Cosmos .jit / gen conv on this path.
-# Debug one loss term: add e.g. --sim_weight 0 (only action) or --action_loss_weight 0 (only sim; keep recon_weight 0).
+# Exp16: same as Exp10 but dit_align_mode=attn_query (DitPatchVectorizerQueryStyle: pre_mlp → MHA → post_mlp).
 set -e
 
 if ACCELERATE_BIN="$(command -v accelerate 2>/dev/null)"; then
@@ -18,14 +16,13 @@ fi
 unset _PY _NVJITLINK_LIB
 
 cd /mnt/wfm/code/zxh/last0_exp/scripts
-# cosmos-policy removed from PYTHONPATH — dit_lib.py is fully self-contained
 export PYTHONPATH=/mnt/wfm/code/zxh/last0_exp:$PYTHONPATH
-export WANDB_MODE=offline
-export CUDA_VISIBLE_DEVICES=0,1
+export WANDB_MODE=online
+export CUDA_VISIBLE_DEVICES=0,1,2,3,4,5,6,7
 
-BASE_RUN_NAME="libero_spatial_dit25"
-EXPERIMENT_NAME="libero_spatial_dit25"
-OUTPUT_ROOT_DIR="/mnt/wfm/code/zxh/last0_exp/ckpt/"
+BASE_RUN_NAME="libero_spatial_dit_attn_query_style"
+EXPERIMENT_NAME="libero_spatial_ablation"
+OUTPUT_ROOT_DIR="/mnt/wfm/ckpt/ckpt/last0_exp/"
 
 DATA_JSON="/mnt/wfm/ckpt/data/data_libero/libero_training_data/libero_json/libero_spatial_no_noops_view2_chunk4_16_stride8_fast1_sparse_fastslow_train.json"
 PRETRAIN_PATH="/mnt/wfm/ckpt/ckpt/pretrained/Janus-Pro-1B"
@@ -33,8 +30,8 @@ PRETRAIN_ACTION_PATH="/mnt/wfm/ckpt/ckpt/pretrained/LaST0_Pretrain_AE_chunk8/tfm
 COSMOS_DIT_PATH="/mnt/wfm/ckpt/ckpt/pretrained/Cosmos-Predict2.5-2B/robot/policy/libero/model.pt"
 WAN_VAE_PATH="/mnt/wfm/ckpt/ckpt/pretrained/Cosmos-Predict2.5-2B/tokenizer.pth"
 
-NUM_PROCESSES=2
-TRAIN_BSZ=2
+NUM_PROCESSES=8
+TRAIN_BSZ=8
 LR=1e-4
 
 accelerate launch --config_file ../config/sft.yaml \
@@ -47,14 +44,14 @@ accelerate launch --config_file ../config/sft.yaml \
     --data_path ${DATA_JSON} \
     --data_root "" \
     --n_epochs 100 \
-    --save_freq 5 \
+    --save_freq 10 \
     --action_dim 7 \
     --action_chunk 8 \
     --train_bsz_per_gpu ${TRAIN_BSZ} \
     --learning_rate ${LR} \
     --min_lr_ratio 0 \
     --weight_decay 0 \
-    --gradient_accumulation_steps 4 \
+    --gradient_accumulation_steps 1 \
     --output_dir ${OUTPUT_ROOT_DIR} \
     --log_dir ${OUTPUT_ROOT_DIR} \
     --experiment_name ${EXPERIMENT_NAME} \
@@ -63,7 +60,7 @@ accelerate launch --config_file ../config/sft.yaml \
     --use_latent 1 \
     --latent_size 4 \
     --vision_backend wan_dit \
-    --dit_align_mode conv \
+    --dit_align_mode attn_query \
     --latent_downsample_mode single \
     --recon_mode latent \
     --recon_weight 0.0 \
@@ -72,4 +69,4 @@ accelerate launch --config_file ../config/sft.yaml \
     --wan_vae_path ${WAN_VAE_PATH} \
     --run_name ${BASE_RUN_NAME}
 
-echo ">>> DiT Early-Exit (Predict2.5 + WAN VAE) Training Finished."
+echo ">>> Exp16 DiT attn_query (query-style stack, 8-GPU) finished."
