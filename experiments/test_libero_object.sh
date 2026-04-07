@@ -23,17 +23,17 @@ elif [ -f /usr/lib64/libEGL_nvidia.so.0 ]; then
   export __EGL_VENDOR_LIBRARY_FILENAMES=/usr/lib64/libEGL_nvidia.so.0
 fi
 
-# Launch LIBERO evals
+# Launch LIBERO evals (wan_dit / cosmos_denoise checkpoint — edit pretrained_checkpoint to your run)
 python experiments/robot/libero/run_libero_eval.py \
-  --pretrained_checkpoint /mnt/wfm/ckpt/ckpt/last0_exp/libero_spatial_ablation/ar_frames_latent_ls16/checkpoint-9-8280/tfmr \
-  --task_suite_name libero_spatial \
+  --pretrained_checkpoint /mnt/wfm/ckpt/ckpt/last0_exp/libero_object_ablation/libero_object_dit_avg/checkpoint-99-104700/tfmr \
+  --task_suite_name libero_object \
   --cuda "0" \
-  --vision_backend cosmos_vae \
-  --llm_latent_mode ar_frames \
-  --latent_intra_frame_block_attn True \
-  --latent_size 16 \
+  --vision_backend wan_dit \
+  --latent_size 4 \
   --num_open_loop_steps 8 \
   --save_videos False \
-  --seed 0
+  --seed 0 \
+  --dit_num_blocks 11 \
+  --dit_align_mode avg
 
 # libero_spatial libero_object libero_goal libero_10

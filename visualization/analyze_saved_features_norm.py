@@ -7,7 +7,7 @@ from sklearn.decomposition import PCA
 from numpy.linalg import norm
 
 def main():
-    data_path = "/mnt/wfm/code/zxh/last0_exp/eval_latent_sim_out/latent_features_img_100.npy"
+    data_path = "/mnt/wfm/code/zxh/last0_exp/eval_latent_sim_out/latent_features_img_1.npy"
     data = np.load(data_path)
     N, T, D = data.shape
 
@@ -48,6 +48,48 @@ def main():
     for k in range(1, T):
         point_to_centroid_dists = norm(pca_reshaped[:, k, :] - centroids[0], axis=1)
         print(f"Mean Distance (t+{k} points vs t centroid): {np.mean(point_to_centroid_dists):.4f} ± {np.std(point_to_centroid_dists):.4f}")
+
+    # ---- Inter-class / Intra-class Distance Analysis (in normalized D-dim space) ----
+    print("\n" + "="*60)
+    print("Inter-class / Intra-class Distance Analysis (Normalized Space)")
+    print("="*60)
+
+    # Class centroids in original D-dim normalized space
+    class_centroids = np.mean(data_normalized, axis=0)  # [T, D]
+
+    # Intra-class: mean L2 distance from each point to its class centroid
+    print("\nIntra-class distance (mean L2 dist to class centroid):")
+    intra_dists_per_class = []
+    for k in range(T):
+        dists = norm(data_normalized[:, k, :] - class_centroids[k], axis=1)  # [N]
+        intra_dists_per_class.append(np.mean(dists))
+        label = "Current (t)" if k == 0 else f"Future (t+{k})"
+        print(f"  {label}: {np.mean(dists):.4f} ± {np.std(dists):.4f}")
+    mean_intra = np.mean(intra_dists_per_class)
+
+    # Inter-class: pairwise centroid L2 distance
+    print("\nInter-class distance (pairwise centroid L2):")
+    inter_dists = []
+    for i in range(T):
+        for j in range(i + 1, T):
+            d = norm(class_centroids[i] - class_centroids[j])
+            inter_dists.append(d)
+            li = "t" if i == 0 else f"t+{i}"
+            lj = f"t+{j}"
+            print(f"  {li} vs {lj}: {d:.4f}")
+    mean_inter = np.mean(inter_dists)
+
+    # Fisher criterion: inter-class variance / intra-class variance
+    global_centroid = np.mean(class_centroids, axis=0)  # [D]
+    inter_var = np.mean(norm(class_centroids - global_centroid, axis=1) ** 2)
+    intra_var = np.mean([
+        np.mean(norm(data_normalized[:, k, :] - class_centroids[k], axis=1) ** 2)
+        for k in range(T)
+    ])
+
+    print(f"\nMean intra-class distance: {mean_intra:.4f}")
+    print(f"Mean inter-class distance: {mean_inter:.4f}")
+    print(f"Fisher criterion (inter/intra variance): {inter_var / (intra_var + 1e-10):.4f}")
 
     sns.set_theme(style="whitegrid")
     plt.figure(figsize=(10, 7), dpi=300)

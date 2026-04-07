@@ -491,7 +491,10 @@ class LlamaModel(LlamaPreTrainedModel):
 
         if position_ids is None:
             position_ids = cache_position.unsqueeze(0)
-        
+
+        latent_block_range = flash_attn_kwargs.pop("latent_block_range", None)
+        latent_block_ranges = flash_attn_kwargs.pop("latent_block_ranges", None)
+
         causal_mask = create_causal_mask(
             config=self.config,
             input_embeds=inputs_embeds,
@@ -500,7 +503,21 @@ class LlamaModel(LlamaPreTrainedModel):
             past_key_values=past_key_values,
             position_ids=position_ids,
         )
-        
+
+        # Intra-block bidirectional: relax causal mask on each [s, e) submatrix. Multiple blocks => block-causal
+        # (per-frame full bidirectional inside each block, causal between blocks / to rest of sequence).
+        block_ranges = None
+        if latent_block_ranges is not None:
+            block_ranges = list(latent_block_ranges)
+        elif latent_block_range is not None:
+            s, e = latent_block_range
+            block_ranges = [(s, e)] if e > s else None
+        if block_ranges is not None and causal_mask is not None and isinstance(causal_mask, torch.Tensor):
+            causal_mask = causal_mask.clone()
+            for s, e in block_ranges:
+                if e > s:
+                    causal_mask[:, :, s:e, s:e] = 0.0
+
         hidden_states = inputs_embeds
 
         # create position embeddings to be shared across the decoder layers

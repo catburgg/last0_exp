@@ -7,6 +7,7 @@ vis_results
 vis_scripts
 rollouts
 test_results
+eval_latent_sim_out/
 
 __pycache__/
 *.pyc

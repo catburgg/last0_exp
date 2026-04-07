@@ -1,6 +1,13 @@
 import os
+import sys
 import json
 import torch
+from pathlib import Path
+
+# Allow `from utils...` when launching as `python scripts/train.py`
+_ROOT = Path(__file__).resolve().parents[1]
+if str(_ROOT) not in sys.path:
+    sys.path.insert(0, str(_ROOT))
 import logging
 import argparse
 import shutil
@@ -25,6 +32,8 @@ from transformers import (
 from transformers import AutoModelForCausalLM
 from datasets import load_dataset, Features, Value, Sequence
 from janus.models import VLChatProcessor, ActionTokenizer
+
+from utils.latent_ar_layout import build_latent_ar_step_embeds, gather_frame_gt
 
 logger = logging.getLogger(__name__)
 logging.basicConfig(level='INFO')
@@ -556,70 +565,156 @@ def train(args: argparse.Namespace) -> None:
                 combined_embeds = torch.cat([compressed_imgs, compressed_pcs, compressed_state], dim=2)
                 compressed_latent_embeds = rearrange(combined_embeds, "b n k d -> b (n k) d")
                 compressed_latent_embeds = compressed_latent_embeds.to(inputs_embeds.dtype)
-                
+
                 latent_start_id = processor.tokenizer.convert_tokens_to_ids("<|latent_start|>")
                 latent_pad_id = processor.tokenizer.convert_tokens_to_ids("<|latent_pad|>")
-                
-                pad_mask = (batch['input_ids'] == latent_pad_id)
+                latent_end_id = processor.tokenizer.convert_tokens_to_ids("<|latent_end|>")
+
+                num_frames = batch['latent_pixel_values'].shape[1]
+                if num_frames != args.latent_num_frames:
+                    logger.warning(
+                        "Batch num_frames (%s) != args.latent_num_frames (%s); using batch value.",
+                        num_frames,
+                        args.latent_num_frames,
+                    )
+                if compressed_latent_embeds.shape[1] != args.latent_size:
+                    raise ValueError(
+                        f"compressed_latent_embeds length {compressed_latent_embeds.shape[1]} != latent_size {args.latent_size}"
+                    )
+                if args.llm_latent_mode == "ar_frames":
+                    if args.latent_size % num_frames != 0:
+                        raise ValueError(
+                            f"latent_size ({args.latent_size}) must be divisible by num_frames ({num_frames}) "
+                            "when llm_latent_mode=ar_frames"
+                        )
+                tokens_per_frame = args.latent_size // num_frames if args.llm_latent_mode == "ar_frames" else 0
+
+                pad_mask = batch['input_ids'] == latent_pad_id
                 extra_len = inputs_embeds.shape[1] - pad_mask.shape[1]
                 if extra_len > 0:
                     extra_mask = torch.zeros(
-                        (pad_mask.shape[0], extra_len), 
-                        dtype=torch.bool, 
-                        device=pad_mask.device
+                        (pad_mask.shape[0], extra_len),
+                        dtype=torch.bool,
+                        device=pad_mask.device,
                     )
                     pad_mask = torch.cat([pad_mask, extra_mask], dim=1)
-                
-                if pad_mask.sum() != compressed_latent_embeds.numel() // compressed_latent_embeds.shape[-1]:
-                    logger.warning("Latent pad count mismatch! Falling back to safe replacement.")
 
-                input_latents = compressed_latent_embeds.detach()
-                
-                if pad_mask.sum() == input_latents.numel() // input_latents.shape[-1]:
-                    inputs_embeds[pad_mask] = input_latents.reshape(-1, input_latents.shape[-1])
+                if args.llm_latent_mode == "ar_frames":
+                    # --- Stage 1: inter-frame AR + intra-frame parallel (teacher forcing with GT for past frames) ---
+                    inputs_embeds_base = inputs_embeds.clone()
+                    sim_loss = inputs_embeds.new_zeros(())
+                    for f in range(num_frames):
+                        prev_gt = None
+                        if f > 0:
+                            prev_gt = compressed_latent_embeds[:, : f * tokens_per_frame, :].detach()
+                        step_embeds, step_attn, cur_start = build_latent_ar_step_embeds(
+                            inputs_embeds_base,
+                            batch['input_ids'],
+                            f,
+                            tokens_per_frame,
+                            latent_start_id,
+                            latent_end_id,
+                            prev_gt,
+                        )
+                        latent_len_step = step_embeds.shape[1] - action_len
+                        latent_indexes_step = torch.arange(0, latent_len_step, device=step_embeds.device)
+                        action_indexes_step = torch.arange(latent_len_step, step_embeds.shape[1], device=step_embeds.device)
+                        latent_block_range = None
+                        if args.latent_intra_frame_block_attn:
+                            latent_block_range = (cur_start, cur_start + tokens_per_frame)
+
+                        outputs = model.language_model.model(
+                            inputs_embeds=step_embeds,
+                            attention_mask=step_attn,
+                            return_dict=True,
+                            use_cache=False,
+                            latent_indexes=latent_indexes_step,
+                            action_indexes=action_indexes_step,
+                            use_latent=args.use_latent,
+                            latent_block_range=latent_block_range,
+                        )
+                        hidden_states = outputs.last_hidden_state
+                        pred_frame = hidden_states[:, cur_start : cur_start + tokens_per_frame, :]
+                        tgt_frame = gather_frame_gt(compressed_latent_embeds, f, tokens_per_frame)
+                        sim_loss = sim_loss + (
+                            1.0
+                            - F.cosine_similarity(
+                                pred_frame.to(torch.float32), tgt_frame.to(torch.float32), dim=-1
+                            ).mean()
+                        )
+                    sim_loss = sim_loss / num_frames
                 else:
-                    logger.warning(f"Latent count mismatch! Mask: {pad_mask.sum()}, GT: {input_latents.shape[1] * bs}")
-
-                outputs = model.language_model.model(
-                    inputs_embeds=inputs_embeds,
-                    attention_mask=batch['attention_mask'],
-                    return_dict=True,
-                    use_cache=False, 
-                    latent_indexes=latent_indexes.to(inputs_embeds.device), 
-                    action_indexes=action_indexes.to(inputs_embeds.device),
-                    use_latent=args.use_latent,
-                )
-                hidden_states = outputs.last_hidden_state
-                
-                pred_embeddings_list = []
-                for b in range(inputs_embeds.shape[0]):
-                    start_idx = (batch['input_ids'][b] == latent_start_id).nonzero(as_tuple=True)[0]
-                    pad_idxs = (batch['input_ids'][b] == latent_pad_id).nonzero(as_tuple=True)[0]
-                    if len(pad_idxs) > 0:
-                        pred_input_idxs = torch.cat([start_idx, pad_idxs[:-1]])
+                    # --- full_sequence: one LM forward over full latent region; shifted hidden vs GT (legacy) ---
+                    input_latents = compressed_latent_embeds.detach()
+                    inputs_embeds_latent = inputs_embeds.clone()
+                    if pad_mask.sum() == input_latents.numel() // input_latents.shape[-1]:
+                        inputs_embeds_latent[pad_mask] = input_latents.reshape(-1, input_latents.shape[-1])
                     else:
-                        pred_input_idxs = start_idx
-                    current_preds = hidden_states[b, pred_input_idxs, :]
-                    pred_embeddings_list.append(current_preds)
+                        logger.warning(
+                            "Latent pad/GT count mismatch in full_sequence stage 1. Mask: %s, GT tokens: %s",
+                            pad_mask.sum(),
+                            input_latents.shape[1] * bs,
+                        )
 
-                inferred_embeddings_all = torch.stack(pred_embeddings_list, dim=0)
+                    outputs = model.language_model.model(
+                        inputs_embeds=inputs_embeds_latent,
+                        attention_mask=batch['attention_mask'],
+                        return_dict=True,
+                        use_cache=False,
+                        latent_indexes=latent_indexes.to(inputs_embeds.device),
+                        action_indexes=action_indexes.to(inputs_embeds.device),
+                        use_latent=args.use_latent,
+                    )
+                    hidden_states = outputs.last_hidden_state
 
-                similarity = F.cosine_similarity(
-                    inferred_embeddings_all.to(torch.float32), 
-                    compressed_latent_embeds.to(torch.float32), 
-                    dim=-1
-                ).mean()
-                sim_loss = 1.0 - similarity
+                    pred_embeddings_list = []
+                    for b in range(inputs_embeds.shape[0]):
+                        start_idx = (batch['input_ids'][b] == latent_start_id).nonzero(as_tuple=True)[0]
+                        pad_idxs = (batch['input_ids'][b] == latent_pad_id).nonzero(as_tuple=True)[0]
+                        if len(pad_idxs) > 0:
+                            pred_input_idxs = torch.cat([start_idx, pad_idxs[:-1]])
+                        else:
+                            pred_input_idxs = start_idx
+                        current_preds = hidden_states[b, pred_input_idxs, :]
+                        pred_embeddings_list.append(current_preds)
 
-                # use the inferred embeddings to replace the latent embeddings
-                if pad_mask.sum() == inferred_embeddings_all.numel() // inferred_embeddings_all.shape[-1]:
-                    inputs_embeds[pad_mask] = inferred_embeddings_all.reshape(-1, inferred_embeddings_all.shape[-1])
+                    inferred_embeddings_all = torch.stack(pred_embeddings_list, dim=0)
+
+                    similarity = F.cosine_similarity(
+                        inferred_embeddings_all.to(torch.float32),
+                        compressed_latent_embeds.to(torch.float32),
+                        dim=-1,
+                    ).mean()
+                    sim_loss = 1.0 - similarity
+
+                # --- Stage 2: action head ---
+                # ar_frames: full GT latent injection (teacher forcing on full future).
+                # full_sequence: use stage-1 predicted latent embeddings in pads (legacy), then action loss.
+                inputs_embeds_action = inputs_embeds.clone()
+                if args.llm_latent_mode == "ar_frames":
+                    input_latents = compressed_latent_embeds.detach()
+                    if pad_mask.sum() != input_latents.numel() // input_latents.shape[-1]:
+                        logger.warning(
+                            "Latent pad count mismatch for action stage. Mask: %s, GT: %s",
+                            pad_mask.sum(),
+                            input_latents.shape[1] * bs,
+                        )
+                    if pad_mask.sum() == input_latents.numel() // input_latents.shape[-1]:
+                        inputs_embeds_action[pad_mask] = input_latents.reshape(-1, input_latents.shape[-1])
+                    else:
+                        logger.warning("Skipping full GT fill for action stage due to mismatch.")
                 else:
-                    logger.warning("Latent count mismatch in Stage 2 (Second Forward). Action training might be faulty.")
+                    if pad_mask.sum() == inferred_embeddings_all.numel() // inferred_embeddings_all.shape[-1]:
+                        inputs_embeds_action[pad_mask] = inferred_embeddings_all.reshape(
+                            -1, inferred_embeddings_all.shape[-1]
+                        )
+                    else:
+                        logger.warning(
+                            "Latent count mismatch in Stage 2 (full_sequence). Action training might be faulty."
+                        )
 
-                # forward for action prediction
                 outputs = model.language_model.model(
-                    inputs_embeds=inputs_embeds,
+                    inputs_embeds=inputs_embeds_action,
                     attention_mask=batch['attention_mask'],
                     return_dict=True,
                     use_cache=False,
@@ -664,7 +759,7 @@ def train(args: argparse.Namespace) -> None:
                 lr_scheduler.step()
                 optimizer.zero_grad()
 
-                action_loss, sim_loss= metric.get_metric() if args.use_latent else metric.get_metric_action()
+                action_loss, sim_loss = metric.get_metric()
                 if accelerator.is_main_process:
                     train_iter.set_postfix(
                         epoch=epoch,
@@ -736,6 +831,29 @@ if __name__ == '__main__':
     parser.add_argument('--fast_view_num', type=int, default=1)
     parser.add_argument('--use_latent', type=int, default=1)
     parser.add_argument('--latent_size', type=int, default=4)
+    parser.add_argument(
+        '--latent_num_frames',
+        type=int,
+        default=4,
+        help='Number of future frames; tokens_per_frame = latent_size // latent_num_frames',
+    )
+    parser.add_argument(
+        '--latent_intra_frame_block_attn',
+        type=int,
+        default=1,
+        help='If 1, use bidirectional attention within each frame block (same as OpenPI/OpenVLA block mask)',
+    )
+    parser.add_argument(
+        '--llm_latent_mode',
+        type=str,
+        default='ar_frames',
+        choices=['ar_frames', 'full_sequence'],
+        help=(
+            'How the LLM matches latent GT: '
+            'ar_frames = frame-wise AR + intra-frame parallel tokens + optional block attn; '
+            'full_sequence = single forward over all pads with GT, shifted-hidden cosine (legacy).'
+        ),
+    )
     parser.add_argument('--pointcloud_embedder_ckpt_path', type=str, required=True, help='PointCloud embedder checkpoint path')
 
     args = parser.parse_args()

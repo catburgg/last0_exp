@@ -907,21 +907,83 @@ class CosmosDiTEarlyExit(nn.Module):
 
 
 class DitPatchVectorizerConv(nn.Module):
-    """(B, Hp, Wp, D) → (B, D) via depthwise spatial conv + pointwise 1×1."""
+    """DiT spatial map → LLM tokens via depthwise spatial reduce + pointwise channel mix.
+
+    Separable-conv design (dw + pw) for parameter efficiency.  Supports variable output
+    grids so ``latent_size > num_frames`` works (e.g. latent_size=16 → 4 tokens/frame).
+
+    Args:
+        x: ``(B, Hp, Wp, D)``
+        grid_h, grid_w: target output grid; ``tokens_per_frame = grid_h * grid_w``.
+
+    Returns:
+        ``(B, D)`` when ``grid_h == grid_w == 1``; else ``(B, grid_h * grid_w, D)``.
+    """
 
     def __init__(self, dim: int = HIDDEN_DIM, hp: int = DIT_HP, wp: int = DIT_WP):
         super().__init__()
+        self.dim = dim
         self.hp = hp
         self.wp = wp
-        self.dw = nn.Conv2d(dim, dim, kernel_size=(hp, wp), groups=dim)
         self.pw = nn.Conv2d(dim, dim, kernel_size=1)
+        self._dw: dict[tuple[int, int], nn.Conv2d] = {}
 
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
+    @staticmethod
+    def _kernel_stride_1d(size_in: int, size_out: int) -> tuple[int, int]:
+        if size_out <= 0:
+            raise ValueError(f"output size must be positive, got {size_out}")
+        stride = max(1, size_in // size_out)
+        kernel = size_in - (size_out - 1) * stride
+        if kernel < 1:
+            raise ValueError(
+                f"incompatible adaptive grid: size_in={size_in}, size_out={size_out}"
+            )
+        return kernel, stride
+
+    def _get_dw(self, gh: int, gw: int) -> nn.Conv2d:
+        key = (gh, gw)
+        if key not in self._dw:
+            name = f"dw_{gh}_{gw}"
+            # Check if already registered via load_state_dict
+            existing = dict(self.named_modules()).get(name, None)
+            if existing is not None and isinstance(existing, nn.Conv2d):
+                self._dw[key] = existing
+            else:
+                kh, sh = self._kernel_stride_1d(self.hp, gh)
+                kw, sw = self._kernel_stride_1d(self.wp, gw)
+                ref = self.pw  # borrow device/dtype from an existing parameter
+                conv = nn.Conv2d(
+                    self.dim,
+                    self.dim,
+                    kernel_size=(kh, kw),
+                    stride=(sh, sw),
+                    groups=self.dim,
+                    padding=0,
+                    device=ref.weight.device,
+                    dtype=ref.weight.dtype,
+                )
+                self._dw[key] = conv
+                self.add_module(name, conv)
+        return self._dw[key]
+
+    def preload_grid(self, grid_h: int, grid_w: int) -> None:
+        """Materialize the depthwise ``Conv2d`` for ``(grid_h, grid_w)`` before the optimizer is built."""
+        _ = self._get_dw(grid_h, grid_w)
+
+    def forward(
+        self,
+        x: torch.Tensor,
+        grid_h: int = 1,
+        grid_w: int = 1,
+    ) -> torch.Tensor:
         # x: (B, Hp, Wp, D)
-        x = x.permute(0, 3, 1, 2)
-        x = self.dw(x)
-        x = self.pw(x)
-        return x.flatten(1)
+        x = x.permute(0, 3, 1, 2).contiguous()   # → (B, D, Hp, Wp)
+        x = self._get_dw(grid_h, grid_w)(x)       # depthwise → (B, D, gh, gw)
+        x = self.pw(x)                             # pointwise → (B, D, gh, gw)
+        x = x.permute(0, 2, 3, 1).reshape(x.shape[0], grid_h * grid_w, -1)
+        if grid_h == 1 and grid_w == 1:
+            return x.squeeze(1)
+        return x
 
 
 class DitPatchVectorizerAttn(nn.Module):

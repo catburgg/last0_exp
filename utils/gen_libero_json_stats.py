@@ -247,9 +247,9 @@ if not os.path.exists(json_save_root):
 
 task_lists = [
 #   'libero_spatial_no_noops',
-#   'libero_goal_no_noops',
-  'libero_object_no_noops',
-#   'libero_10_no_noops'
+   'libero_goal_no_noops',
+#   'libero_object_no_noops',
+#    'libero_10_no_noops'
 ]
 
 # 遍历每一个 task，分别为它们生成单独的 json 记录

@@ -77,8 +77,6 @@ logger = logging.getLogger(__name__)
 
 @dataclass
 class GenerateConfig:
-    # fmt: off
-
     #################################################################################################################
     # Model-specific parameters
     #################################################################################################################
@@ -89,6 +87,9 @@ class GenerateConfig:
     latent_size: int = 16                             # Number of latent steps
     use_latent: bool = True                         # Whether to use latent
     vision_backend: str = "cosmos_vae"              # cosmos_vae, siglip, wan_dit, cosmos_denoise; must match checkpoint
+    llm_latent_mode: str = "full_sequence"            # ar_frames or full_sequence
+    latent_num_frames: int = 4                       # Number of future frames
+    latent_intra_frame_block_attn: bool = False      # Bidirectional attention within each frame block
 
     center_crop: bool = False                         # Center crop? (if trained w/ random crop image aug)
     num_open_loop_steps: int = NUM_ACTIONS_CHUNK      # Number of actions to execute open-loop before requerying policy

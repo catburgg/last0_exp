@@ -31,6 +31,7 @@ from transformers import (
 from transformers import AutoModelForCausalLM
 from janus.models import ActionTokenizer, VLChatProcessor
 import janus.models.modeling_vlm  # noqa: F401 — registers multi_modality with AutoConfig / AutoModelForCausalLM
+from utils.latent_ar_layout import find_latent_bounds, gather_frame_gt
 
 logger = logging.getLogger(__name__)
 logging.basicConfig(level='INFO')
@@ -235,6 +236,8 @@ class SftDataset(Dataset):
         self.state_max = np.array(self.stats_data[self.dataset_name]['state']['q99'])
 
         self.img_dir = os.path.dirname(config.data_path)
+        self._image_path_prefix_from = getattr(config, "image_path_prefix_from", "") or ""
+        self._image_path_prefix_to = getattr(config, "image_path_prefix_to", "") or ""
         accelerator.print(f'Total data amount: {len(self.data)}')
 
   
@@ -251,6 +254,16 @@ class SftDataset(Dataset):
         images = [PIL.Image.open(image_path).convert("RGB") for image_path in image_paths]
         images_outputs = self.processor.image_processor(images, return_tensors="pt")
         return images_outputs['pixel_values']
+
+    def resolve_image_path(self, stored: str) -> str:
+        if os.path.isabs(stored):
+            path = stored
+        else:
+            path = os.path.normpath(os.path.join(self.img_dir, stored))
+        pf, pt = self._image_path_prefix_from, self._image_path_prefix_to
+        if pf and pt and path.startswith(pf):
+            path = pt + path[len(pf) :]
+        return path
 
     def sample_beta(self, alpha, beta, bsize, device):
         alpha_t = torch.as_tensor(alpha, dtype=torch.float32, device=device)
@@ -278,7 +291,7 @@ class SftDataset(Dataset):
         if self.config.use_latent:
             # Image
             latent_images_nested = [
-                [os.path.join(self.img_dir, img) for img in x['output_image']]
+                [self.resolve_image_path(img) for img in x['output_image']]
                 for x in batch
             ]
             latent_pixel_values_list = [
@@ -289,7 +302,7 @@ class SftDataset(Dataset):
 
             # Current frame (input_image_slow[0]) for cosmos_denoise conditioning
             current_image_paths = [
-                os.path.join(self.img_dir, x['input_image_slow'][0]) for x in batch
+                self.resolve_image_path(x['input_image_slow'][0]) for x in batch
             ]
             current_pixel_values = self.process_image(current_image_paths).to(torch.bfloat16)
             # [B, C, H, W]  SIGLIP-normalized, same format as latent_pixel_values
@@ -390,7 +403,7 @@ class SftDataset(Dataset):
             sft_format = pre_format
             
             if len(all_input_imgs) > 0:
-                encoder_pixel_values = self.process_image([os.path.join(self.img_dir, input_img) for input_img in all_input_imgs])
+                encoder_pixel_values = self.process_image([self.resolve_image_path(input_img) for input_img in all_input_imgs])
                 num_image_tokens = [self.image_len] * len(all_input_imgs)
             else:
                 encoder_pixel_values = None
@@ -675,15 +688,30 @@ def train(args: argparse.Namespace) -> None:
             model.dit_patch_vectorizer = DitPatchVectorizerAvgPool().to(dtype=torch.bfloat16)
         else:
             model.dit_patch_vectorizer = DitPatchVectorizerConv().to(dtype=torch.bfloat16)
+            # Materialize dw_* Conv2d for the training grid before the optimizer is built.
+            # latent_num_frames should match batch['latent_pixel_values'].shape[1] (e.g. 4 future frames).
+            if args.latent_size % args.latent_num_frames != 0:
+                raise ValueError(
+                    f"latent_size ({args.latent_size}) must be divisible by latent_num_frames ({args.latent_num_frames})"
+                )
+            _tpf = args.latent_size // args.latent_num_frames
+            if _tpf <= 1:
+                _gh, _gw = 1, 1
+            else:
+                _r = int(math.isqrt(_tpf))
+                _gh, _gw = (_r, _r) if _r * _r == _tpf else (1, _tpf)
+            model.dit_patch_vectorizer.preload_grid(_gh, _gw)
         model.dit_gt_to_llm = nn.Linear(DIT_DIM, hs).to(dtype=torch.bfloat16)
         model.dit_out_proj = nn.Linear(hs, DIT_DIM).to(dtype=torch.bfloat16)
 
         for mname, m in model.named_modules():
             if mname.startswith(("dit_patch_vectorizer", "dit_gt_to_llm", "dit_out_proj")):
                 if isinstance(m, (nn.Conv2d, nn.ConvTranspose2d)):
+                    # depthwise conv has groups==in_channels; fan_in is per-channel: 1 * kh * kw
+                    is_dw = m.groups > 1
+                    fan_in = (1 if is_dw else m.weight.shape[1]) * max(1, m.weight.shape[2]) * max(1, m.weight.shape[3])
                     nn.init.kaiming_uniform_(m.weight, a=math.sqrt(5))
                     if m.bias is not None:
-                        fan_in = m.weight.shape[1] * max(1, m.weight.shape[2]) * max(1, m.weight.shape[3])
                         bound = 1.0 / math.sqrt(fan_in)
                         nn.init.uniform_(m.bias, -bound, bound)
                 elif isinstance(m, nn.Linear):
@@ -834,13 +862,31 @@ def train(args: argparse.Namespace) -> None:
             # Must match batch['noisy_actions'].shape[1] (Libero json often uses 16, not --action_chunk).
             noise_len = batch["noisy_actions"].shape[1]
             action_len = 578 * fast_img_len + 1 + noise_len
-            latent_indexes, action_indexes = create_component_indexes(inputs_embeds.shape[1], action_len) 
-            
+            latent_indexes, action_indexes = create_component_indexes(inputs_embeds.shape[1], action_len)
+
+            # ── Shared latent token IDs + pad_mask (used by all latent backends) ──────────
+            latent_start_id = processor.tokenizer.convert_tokens_to_ids("<|latent_start|>")
+            latent_pad_id   = processor.tokenizer.convert_tokens_to_ids("<|latent_pad|>")
+            latent_end_id   = processor.tokenizer.convert_tokens_to_ids("<|latent_end|>")
+            pad_mask = batch['input_ids'] == latent_pad_id
+            _extra_len = inputs_embeds.shape[1] - pad_mask.shape[1]
+            if _extra_len > 0:
+                pad_mask = torch.cat(
+                    [pad_mask,
+                     torch.zeros((pad_mask.shape[0], _extra_len), dtype=torch.bool, device=pad_mask.device)],
+                    dim=1,
+                )
+
             if args.vision_backend == 'wan_dit':
                 from janus.models.cosmos_tokenizer.dit_lib import build_dit_pred_features
 
                 bs = batch['latent_pixel_values'].shape[0]
                 num_frames = batch['latent_pixel_values'].shape[1]
+                if num_frames != args.latent_num_frames:
+                    raise ValueError(
+                        f"batch latent frames ({num_frames}) must match --latent_num_frames ({args.latent_num_frames}); "
+                        "DiT conv grid is preloaded from that value."
+                    )
                 helper_images = rearrange(batch['latent_pixel_values'], "b n c h w -> (b n) c h w")
                 cosmos_input = convert_to_cosmos_input(helper_images, image_mean, image_std)
                 # WAN encode runs in float32 inside WanVAEEncoder (see wan_vae_lib.encode).
@@ -869,76 +915,13 @@ def train(args: argparse.Namespace) -> None:
                         model.dit_gt_to_llm(dit_vec_bn.reshape(-1, d_dim)).view(bs, args.latent_size, -1)
                     )
                 dit_vec_for_sim = dit_vec_bn.mean(dim=1) if dit_vec_bn.dim() == 3 else dit_vec_bn
-
-                latent_start_id = processor.tokenizer.convert_tokens_to_ids("<|latent_start|>")
-                latent_pad_id = processor.tokenizer.convert_tokens_to_ids("<|latent_pad|>")
-                pad_mask = batch['input_ids'] == latent_pad_id
-                extra_len = inputs_embeds.shape[1] - pad_mask.shape[1]
-                if extra_len > 0:
-                    pad_mask = torch.cat(
-                        [
-                            pad_mask,
-                            torch.zeros(
-                                (pad_mask.shape[0], extra_len), dtype=torch.bool, device=pad_mask.device
-                            ),
-                        ],
-                        dim=1,
+                gt_features = dit_vec_for_sim.to(torch.float32)
+                def build_pred_fn(ie, _bs=bs, _nf=num_frames):
+                    return build_dit_pred_features(
+                        ie.to(torch.float32), batch_size=_bs, num_frames=_nf,
+                        latent_size=args.latent_size, dit_out_proj=model.dit_out_proj,
                     )
-                inputs_embeds = inputs_embeds.clone()
-                inputs_embeds[pad_mask] = compressed_latent_embeds.reshape(-1, compressed_latent_embeds.shape[-1])
-
-                outputs = model.language_model.model(
-                    inputs_embeds=inputs_embeds,
-                    attention_mask=batch['attention_mask'],
-                    return_dict=True,
-                    use_cache=False,
-                    latent_indexes=latent_indexes.to(inputs_embeds.device),
-                    action_indexes=action_indexes.to(inputs_embeds.device),
-                    use_latent=args.use_latent,
-                )
-                hidden_states = outputs.last_hidden_state
-
-                pred_embeddings_list = []
-                for b in range(inputs_embeds.shape[0]):
-                    start_idx = (batch['input_ids'][b] == latent_start_id).nonzero(as_tuple=True)[0]
-                    pad_idxs = (batch['input_ids'][b] == latent_pad_id).nonzero(as_tuple=True)[0]
-                    pred_input_idxs = torch.cat([start_idx, pad_idxs[:-1]]) if len(pad_idxs) > 0 else start_idx
-                    pred_embeddings_list.append(hidden_states[b, pred_input_idxs, :])
-                inferred_embeddings_all = torch.stack(pred_embeddings_list, dim=0)
-
-                pred_dit_features = build_dit_pred_features(
-                    inferred_embeddings_all.to(torch.float32),
-                    batch_size=bs,
-                    num_frames=num_frames,
-                    latent_size=args.latent_size,
-                    dit_out_proj=model.dit_out_proj,
-                )
-                sim_loss = 1.0 - F.cosine_similarity(
-                    pred_dit_features, dit_vec_for_sim.to(torch.float32), dim=-1
-                ).mean()
-                recon_loss = torch.tensor(0.0, device=sim_loss.device)
-
-                inputs_embeds[pad_mask] = inferred_embeddings_all.reshape(-1, inferred_embeddings_all.shape[-1])
-
-                outputs = model.language_model.model(
-                    inputs_embeds=inputs_embeds,
-                    attention_mask=batch['attention_mask'],
-                    return_dict=True,
-                    use_cache=False,
-                    latent_indexes=latent_indexes.to(inputs_embeds.device),
-                    action_indexes=action_indexes.to(inputs_embeds.device),
-                    use_latent=args.use_latent,
-                )
-                hidden_states = outputs.last_hidden_state
-
-                predicted_noise = model.final_layer(hidden_states)[:, -(batch['target'].shape[1]):, :]
-                action_loss = nn.MSELoss()(predicted_noise, batch['target'].to(predicted_noise.dtype))
-                loss = (
-                    args.sim_weight * sim_loss
-                    + args.action_loss_weight * action_loss
-                    + args.recon_weight * recon_loss
-                )
-                metric(action_loss, sim_loss, recon_loss)
+                supports_recon = False
 
             elif args.vision_backend == 'cosmos_denoise':
                 from janus.models.cosmos_tokenizer.dit_lib import build_dit_pred_features
@@ -1001,76 +984,13 @@ def train(args: argparse.Namespace) -> None:
 
                     dit_vec_bn = hidden.mean(dim=[1, 2, 3])  # [B*N, 2048]
                 compressed_latent_embeds = model.dit_gt_to_llm(dit_vec_bn).view(bs, num_frames, -1)
-
-                latent_start_id = processor.tokenizer.convert_tokens_to_ids("<|latent_start|>")
-                latent_pad_id = processor.tokenizer.convert_tokens_to_ids("<|latent_pad|>")
-                pad_mask = batch['input_ids'] == latent_pad_id
-                extra_len = inputs_embeds.shape[1] - pad_mask.shape[1]
-                if extra_len > 0:
-                    pad_mask = torch.cat(
-                        [
-                            pad_mask,
-                            torch.zeros(
-                                (pad_mask.shape[0], extra_len), dtype=torch.bool, device=pad_mask.device
-                            ),
-                        ],
-                        dim=1,
+                gt_features = dit_vec_bn.to(torch.float32)
+                def build_pred_fn(ie, _bs=bs, _nf=num_frames):
+                    return build_dit_pred_features(
+                        ie.to(torch.float32), batch_size=_bs, num_frames=_nf,
+                        latent_size=args.latent_size, dit_out_proj=model.dit_out_proj,
                     )
-                inputs_embeds = inputs_embeds.clone()
-                inputs_embeds[pad_mask] = compressed_latent_embeds.reshape(-1, compressed_latent_embeds.shape[-1])
-
-                outputs = model.language_model.model(
-                    inputs_embeds=inputs_embeds,
-                    attention_mask=batch['attention_mask'],
-                    return_dict=True,
-                    use_cache=False,
-                    latent_indexes=latent_indexes.to(inputs_embeds.device),
-                    action_indexes=action_indexes.to(inputs_embeds.device),
-                    use_latent=args.use_latent,
-                )
-                hidden_states = outputs.last_hidden_state
-
-                pred_embeddings_list = []
-                for b in range(inputs_embeds.shape[0]):
-                    start_idx = (batch['input_ids'][b] == latent_start_id).nonzero(as_tuple=True)[0]
-                    pad_idxs = (batch['input_ids'][b] == latent_pad_id).nonzero(as_tuple=True)[0]
-                    pred_input_idxs = torch.cat([start_idx, pad_idxs[:-1]]) if len(pad_idxs) > 0 else start_idx
-                    pred_embeddings_list.append(hidden_states[b, pred_input_idxs, :])
-                inferred_embeddings_all = torch.stack(pred_embeddings_list, dim=0)
-
-                pred_dit_features = build_dit_pred_features(
-                    inferred_embeddings_all.to(torch.float32),
-                    batch_size=bs,
-                    num_frames=num_frames,
-                    latent_size=args.latent_size,
-                    dit_out_proj=model.dit_out_proj,
-                )
-                sim_loss = 1.0 - F.cosine_similarity(
-                    pred_dit_features, dit_vec_bn.to(torch.float32), dim=-1
-                ).mean()
-                recon_loss = torch.tensor(0.0, device=sim_loss.device)
-
-                inputs_embeds[pad_mask] = inferred_embeddings_all.reshape(-1, inferred_embeddings_all.shape[-1])
-
-                outputs = model.language_model.model(
-                    inputs_embeds=inputs_embeds,
-                    attention_mask=batch['attention_mask'],
-                    return_dict=True,
-                    use_cache=False,
-                    latent_indexes=latent_indexes.to(inputs_embeds.device),
-                    action_indexes=action_indexes.to(inputs_embeds.device),
-                    use_latent=args.use_latent,
-                )
-                hidden_states = outputs.last_hidden_state
-
-                predicted_noise = model.final_layer(hidden_states)[:, -(batch['target'].shape[1]):, :]
-                action_loss = nn.MSELoss()(predicted_noise, batch['target'].to(predicted_noise.dtype))
-                loss = (
-                    args.sim_weight * sim_loss
-                    + args.action_loss_weight * action_loss
-                    + args.recon_weight * recon_loss
-                )
-                metric(action_loss, sim_loss, recon_loss)
+                supports_recon = False
 
             elif args.vision_backend == 'cosmos_vae':
                 bs = batch['latent_pixel_values'].shape[0]
@@ -1079,103 +999,149 @@ def train(args: argparse.Namespace) -> None:
                 cosmos_input = convert_to_cosmos_input(helper_images, image_mean, image_std)
                 with torch.no_grad():
                     gt_latent_features = model.cosmos_tokenizer.encode(cosmos_input)
-
-                latent_start_id = processor.tokenizer.convert_tokens_to_ids("<|latent_start|>")
-                latent_pad_id = processor.tokenizer.convert_tokens_to_ids("<|latent_pad|>")
                 target_side = infer_latent_side(args.latent_size, num_frames)
-
                 gt_latent_for_conv = gt_latent_features.to(model.gen_in_proj.weight.dtype)
                 gen_features = model.gen_in_proj(gt_latent_for_conv)
                 compressed_2d = model.downsample_conv(gen_features)
                 compressed_flat = rearrange(compressed_2d, "bn d h w -> bn (h w) d")
                 compressed_latent_embeds = rearrange(
-                    compressed_flat,
-                    "(b n) k d -> b (n k) d",
-                    b=bs,
-                    n=num_frames,
+                    compressed_flat, "(b n) k d -> b (n k) d", b=bs, n=num_frames,
                 )
                 compressed_latent_embeds = compressed_latent_embeds.to(inputs_embeds.dtype)
-
-                pad_mask = batch['input_ids'] == latent_pad_id
-                extra_len = inputs_embeds.shape[1] - pad_mask.shape[1]
-                if extra_len > 0:
-                    pad_mask = torch.cat(
-                        [
-                            pad_mask,
-                            torch.zeros(
-                                (pad_mask.shape[0], extra_len), dtype=torch.bool, device=pad_mask.device
-                            ),
-                        ],
-                        dim=1,
-                    )
-                inputs_embeds = inputs_embeds.clone()
-                inputs_embeds[pad_mask] = compressed_latent_embeds.reshape(-1, compressed_latent_embeds.shape[-1])
-
-                outputs = model.language_model.model(
-                    inputs_embeds=inputs_embeds,
-                    attention_mask=batch['attention_mask'],
-                    return_dict=True,
-                    use_cache=False,
-                    latent_indexes=latent_indexes.to(inputs_embeds.device),
-                    action_indexes=action_indexes.to(inputs_embeds.device),
-                    use_latent=args.use_latent,
-                )
-                hidden_states = outputs.last_hidden_state
-
-                pred_embeddings_list = []
-                for b in range(inputs_embeds.shape[0]):
-                    start_idx = (batch['input_ids'][b] == latent_start_id).nonzero(as_tuple=True)[0]
-                    pad_idxs = (batch['input_ids'][b] == latent_pad_id).nonzero(as_tuple=True)[0]
-                    pred_input_idxs = torch.cat([start_idx, pad_idxs[:-1]]) if len(pad_idxs) > 0 else start_idx
-                    pred_embeddings_list.append(hidden_states[b, pred_input_idxs, :])
-                inferred_embeddings_all = torch.stack(pred_embeddings_list, dim=0)
-
                 up_dtype = next(model.upsample_conv.parameters()).dtype
-                infer_for_sim = inferred_embeddings_all.to(up_dtype)
-                pred_latent_features = build_pred_latent_features(
-                    infer_for_sim,
-                    batch_size=bs,
-                    num_frames=num_frames,
-                    target_side=target_side,
-                    model=model,
-                )
-                gt_latent_features = gt_latent_features.to(torch.float32)
-                pred_latent_features = pred_latent_features.to(torch.float32)
+                gt_features = gt_latent_features.to(torch.float32)
+                def build_pred_fn(ie, _bs=bs, _nf=num_frames, _ts=target_side):
+                    return build_pred_latent_features(
+                        ie.to(up_dtype), batch_size=_bs, num_frames=_nf, target_side=_ts, model=model,
+                    ).to(torch.float32)
+                supports_recon = True
 
-                similarity = F.cosine_similarity(
-                    pred_latent_features.to(torch.float32),
-                    gt_latent_features.to(torch.float32),
-                    dim=-1,
-                ).mean()
-                sim_loss = 1.0 - similarity
+            # ── Shared llm_latent_mode block (all latent backends) ──────────────────────
+            if args.vision_backend in ('wan_dit', 'cosmos_denoise', 'cosmos_vae'):
+                if args.llm_latent_mode == 'ar_frames':
+                    # Frame-level shift AR: frame f's hidden states predict frame f+1.
+                    # Frame 0 is predicted from hidden[latent_start] (repeated K times).
+                    # Bidirectional block attention within each frame (if latent_intra_frame_block_attn).
+                    if args.latent_size % num_frames != 0:
+                        raise ValueError(
+                            f"latent_size ({args.latent_size}) must be divisible by num_frames ({num_frames}) "
+                            "when llm_latent_mode=ar_frames"
+                        )
+                    tokens_per_frame = args.latent_size // num_frames
+                    row_ids = batch["input_ids"][0]
+                    ls, _ = find_latent_bounds(row_ids, latent_start_id, latent_end_id)
 
-                if args.recon_mode == "latent":
-                    recon_loss = F.mse_loss(pred_latent_features, gt_latent_features)
-                elif args.recon_mode == "pixel":
-                    pred_pixels = model.cosmos_tokenizer.decode(pred_latent_features)
-                    with torch.no_grad():
-                        gt_pixels = model.cosmos_tokenizer.decode(gt_latent_features)
-                    recon_loss = F.mse_loss(pred_pixels.to(torch.float32), gt_pixels.to(torch.float32))
-                else:
-                    recon_loss = F.mse_loss(pred_latent_features, gt_latent_features)
+                    # Forward 1: GT teacher forcing + (optional) block-causal attention
+                    inputs_embeds_ar = inputs_embeds.clone()
+                    inputs_embeds_ar[pad_mask] = compressed_latent_embeds.reshape(
+                        -1, compressed_latent_embeds.shape[-1])
+                    ar_kw = dict(
+                        inputs_embeds=inputs_embeds_ar,
+                        attention_mask=batch["attention_mask"],
+                        return_dict=True, use_cache=False,
+                        latent_indexes=latent_indexes.to(inputs_embeds_ar.device),
+                        action_indexes=action_indexes.to(inputs_embeds_ar.device),
+                        use_latent=args.use_latent,
+                    )
+                    if args.latent_intra_frame_block_attn:
+                        ar_kw["latent_block_ranges"] = [
+                            (ls + 1 + f * tokens_per_frame, ls + 1 + (f + 1) * tokens_per_frame)
+                            for f in range(num_frames)
+                        ]
+                    hs_ar = model.language_model.model(**ar_kw).last_hidden_state  # [B, T, D]
 
-                inputs_embeds[pad_mask] = inferred_embeddings_all.reshape(-1, inferred_embeddings_all.shape[-1])
+                    # Frame-shifted predictors:
+                    #   frame 0  ← hidden[ls]  repeated K times  (only sees prefix)
+                    #   frame f  ← hidden[frame f-1 positions]   (sees prefix + GT frames 0..f-1)
+                    h_pred_list = [
+                        hs_ar[:, ls:ls + 1, :].expand(-1, tokens_per_frame, -1).contiguous()
+                    ]
+                    for _f in range(num_frames - 1):
+                        _s = ls + 1 + _f * tokens_per_frame
+                        h_pred_list.append(hs_ar[:, _s:_s + tokens_per_frame, :])
+                    inferred_embeddings_all = torch.cat(h_pred_list, dim=1)  # [B, N*K, D]
 
-                # forward for action prediction
-                outputs = model.language_model.model(
-                    inputs_embeds=inputs_embeds,
-                    attention_mask=batch['attention_mask'],
-                    return_dict=True,
-                    use_cache=False,
-                    latent_indexes=latent_indexes.to(inputs_embeds.device),
-                    action_indexes=action_indexes.to(inputs_embeds.device),
-                    use_latent=args.use_latent,
-                )
-                hidden_states = outputs.last_hidden_state
+                    # Loss via build_pred_fn (backend-specific projection to latent space)
+                    pred_features = build_pred_fn(inferred_embeddings_all)
+                    sim_loss = 1.0 - F.cosine_similarity(pred_features, gt_features, dim=-1).mean()
+                    if supports_recon and args.recon_mode == "latent":
+                        recon_loss = F.mse_loss(pred_features, gt_features)
+                    elif supports_recon and args.recon_mode == "pixel":
+                        pred_pixels = model.cosmos_tokenizer.decode(pred_features)
+                        with torch.no_grad():
+                            gt_pixels = model.cosmos_tokenizer.decode(gt_features)
+                        recon_loss = F.mse_loss(pred_pixels.to(torch.float32), gt_pixels.to(torch.float32))
+                    else:
+                        recon_loss = inputs_embeds.new_zeros(())
 
-                # calculate multimodal loss
-                # action loss (cross entropy)
-                predicted_noise = model.final_layer(hidden_states)[:, -(batch['target'].shape[1]):, :] # the last token is noise
+                    # Forward 2: frame-shifted predictors as latent inputs → action head
+                    inputs_embeds_action = inputs_embeds.clone()
+                    inputs_embeds_action[pad_mask] = (
+                        inferred_embeddings_all
+                        .reshape(-1, inferred_embeddings_all.shape[-1])
+                        .detach().to(inputs_embeds_action.dtype)
+                    )
+                    action_kw = dict(
+                        inputs_embeds=inputs_embeds_action,
+                        attention_mask=batch["attention_mask"],
+                        return_dict=True, use_cache=False,
+                        latent_indexes=latent_indexes.to(inputs_embeds_action.device),
+                        action_indexes=action_indexes.to(inputs_embeds_action.device),
+                        use_latent=args.use_latent,
+                    )
+                    if args.latent_intra_frame_block_attn:
+                        action_kw["latent_block_ranges"] = ar_kw["latent_block_ranges"]
+                    hidden_states = model.language_model.model(**action_kw).last_hidden_state
+
+                else:  # full_sequence
+                    inputs_embeds = inputs_embeds.clone()
+                    inputs_embeds[pad_mask] = compressed_latent_embeds.reshape(
+                        -1, compressed_latent_embeds.shape[-1])
+                    outputs = model.language_model.model(
+                        inputs_embeds=inputs_embeds,
+                        attention_mask=batch['attention_mask'],
+                        return_dict=True, use_cache=False,
+                        latent_indexes=latent_indexes.to(inputs_embeds.device),
+                        action_indexes=action_indexes.to(inputs_embeds.device),
+                        use_latent=args.use_latent,
+                    )
+                    hidden_states = outputs.last_hidden_state
+
+                    pred_embeddings_list = []
+                    for b in range(inputs_embeds.shape[0]):
+                        start_idx = (batch['input_ids'][b] == latent_start_id).nonzero(as_tuple=True)[0]
+                        pad_idxs  = (batch['input_ids'][b] == latent_pad_id).nonzero(as_tuple=True)[0]
+                        pred_input_idxs = (torch.cat([start_idx, pad_idxs[:-1]])
+                                           if len(pad_idxs) > 0 else start_idx)
+                        pred_embeddings_list.append(hidden_states[b, pred_input_idxs, :])
+                    inferred_embeddings_all = torch.stack(pred_embeddings_list, dim=0)
+
+                    pred_features = build_pred_fn(inferred_embeddings_all)
+                    sim_loss = 1.0 - F.cosine_similarity(pred_features, gt_features, dim=-1).mean()
+                    if supports_recon and args.recon_mode == "latent":
+                        recon_loss = F.mse_loss(pred_features, gt_features)
+                    elif supports_recon and args.recon_mode == "pixel":
+                        pred_pixels = model.cosmos_tokenizer.decode(pred_features)
+                        with torch.no_grad():
+                            gt_pixels = model.cosmos_tokenizer.decode(gt_features)
+                        recon_loss = F.mse_loss(pred_pixels.to(torch.float32), gt_pixels.to(torch.float32))
+                    else:
+                        recon_loss = inputs_embeds.new_zeros(())
+
+                    inputs_embeds[pad_mask] = inferred_embeddings_all.reshape(
+                        -1, inferred_embeddings_all.shape[-1])
+                    outputs = model.language_model.model(
+                        inputs_embeds=inputs_embeds,
+                        attention_mask=batch['attention_mask'],
+                        return_dict=True, use_cache=False,
+                        latent_indexes=latent_indexes.to(inputs_embeds.device),
+                        action_indexes=action_indexes.to(inputs_embeds.device),
+                        use_latent=args.use_latent,
+                    )
+                    hidden_states = outputs.last_hidden_state
+
+                # ── Shared action loss (identical for all latent backends) ──────────────
+                predicted_noise = model.final_layer(hidden_states)[:, -(batch['target'].shape[1]):, :]
                 action_loss = nn.MSELoss()(predicted_noise, batch['target'].to(predicted_noise.dtype))
                 loss = (
                     args.sim_weight * sim_loss
@@ -1233,7 +1199,11 @@ def train(args: argparse.Namespace) -> None:
                             'lr': lr_scheduler.get_last_lr()[0]
                         }, step=global_step)
             global_step += 1
+            if args.max_steps > 0 and global_step >= args.max_steps:
+                break
 
+        if args.max_steps > 0 and global_step >= args.max_steps:
+            break
         if ((epoch + 1) % args.save_freq == 0) or (epoch == args.n_epochs-1):
             accelerator.wait_for_everyone()
             save_checkpoint(
@@ -1259,6 +1229,18 @@ if __name__ == '__main__':
 
     # Data related
     parser.add_argument('--data_path', type=str, required=True, help='Training data path, can be multiple paths')
+    parser.add_argument(
+        '--image_path_prefix_from',
+        type=str,
+        default='',
+        help='Optional absolute path prefix on JSON image paths to replace (with --image_path_prefix_to)',
+    )
+    parser.add_argument(
+        '--image_path_prefix_to',
+        type=str,
+        default='',
+        help='Replacement prefix for paths starting with --image_path_prefix_from',
+    )
     parser.add_argument('--data_root', type=str, required=True, default='')
     parser.add_argument('--output_dir', type=str, default='./', help='Model save path')
     parser.add_argument('--max_ckpts', type=int, default=10, help='Maximum number of checkpoints to save')
@@ -1268,6 +1250,7 @@ if __name__ == '__main__':
     parser.add_argument('--max_seq_len', type=int, default=4096, help='Maximum sequence length')
     parser.add_argument('--gradient_accumulation_steps', type=int, default=16, help='Gradient accumulation steps')
     parser.add_argument('--max_grad_norm', type=float, default=1.0, help='Gradient clipping threshold, set to 0 for no clipping')
+    parser.add_argument('--max_steps', type=int, default=0, help='If >0, exit after this many optimizer steps (for quick testing)')
     parser.add_argument('--train_bsz_per_gpu', type=int, default=1, help='Batch size per GPU')
     parser.add_argument('--weight_decay', type=float, default=1e-4, help='Weight decay')
     parser.add_argument('--learning_rate', type=float, default=5e-6, help='Learning rate')
@@ -1287,6 +1270,28 @@ if __name__ == '__main__':
     parser.add_argument('--fast_view_num', type=int, default=1)
     parser.add_argument('--use_latent', type=int, default=1)
     parser.add_argument('--latent_size', type=int, default=4)
+    parser.add_argument(
+        '--latent_num_frames',
+        type=int,
+        default=4,
+        help='Number of future frames; tokens_per_frame = latent_size // latent_num_frames',
+    )
+    parser.add_argument(
+        '--latent_intra_frame_block_attn',
+        type=int,
+        default=0,
+        help='If 1, use bidirectional attention within each frame block',
+    )
+    parser.add_argument(
+        '--llm_latent_mode',
+        type=str,
+        default='full_sequence',
+        choices=['ar_frames', 'full_sequence'],
+        help=(
+            'ar_frames = one LM forward, full GT latent, per-frame cosine (causal between frames); '
+            'full_sequence = single forward over all pads with GT (legacy).'
+        ),
+    )
     parser.add_argument('--vision_backend', type=str, default='cosmos_vae', choices=['cosmos_vae', 'siglip', 'wan_dit', 'cosmos_denoise'])
     parser.add_argument('--dit_align_mode', type=str, default='conv', choices=['conv', 'attn', 'attn_query', 'avg'])
     parser.add_argument('--dit_num_blocks', type=int, default=11)

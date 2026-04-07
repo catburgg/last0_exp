@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import argparse
 from typing import Optional
+import glob
 import os
 import sys
 
@@ -22,6 +23,7 @@ if SCRIPT_DIR not in sys.path:
 import numpy as np
 import torch
 import torch.nn.functional as F
+from safetensors.torch import load_file
 from tqdm import tqdm
 
 from janus.models import VLChatProcessor
@@ -30,6 +32,10 @@ from janus.models.cosmos_tokenizer.dit_lib import (
     CosmosDiTFullHead,
     FULL_PATCH_TEMPORAL,
     pad_latent_temporal,
+    DitPatchVectorizerAvgPool,
+    DitPatchVectorizerConv,
+    DitPatchVectorizerAttn,
+    DitPatchVectorizerQueryStyle,
 )
 from janus.models.cosmos_tokenizer.wan_vae_lib import WanVAECodec
 from train_wopc import SftDataset
@@ -71,6 +77,52 @@ def _compress_tokens_like_original(
     return compressed.reshape(b, -1)
 
 
+def _build_vectorizer(
+    dit_align_mode: str,
+    checkpoint_path: str,
+    device: torch.device,
+) -> Optional[torch.nn.Module]:
+    """Instantiate the requested DitPatchVectorizer and optionally load weights from checkpoint."""
+    if dit_align_mode == "mean_pool":
+        return None
+
+    cls_map = {
+        "avg": DitPatchVectorizerAvgPool,
+        "conv": DitPatchVectorizerConv,
+        "attn": DitPatchVectorizerAttn,
+        "attn_query": DitPatchVectorizerQueryStyle,
+    }
+    vec = cls_map[dit_align_mode]().to(device=device, dtype=torch.bfloat16).eval()
+
+    safetensor_files = sorted(glob.glob(os.path.join(checkpoint_path, "model*.safetensors")))
+    if safetensor_files:
+        prefix = "dit_patch_vectorizer."
+        ckpt_state: dict = {}
+        for sf in safetensor_files:
+            for k, v in load_file(sf, device=str(device)).items():
+                if k.startswith(prefix):
+                    ckpt_state[k[len(prefix):]] = v
+        if ckpt_state:
+            # Remap legacy "dw.*" keys to the new dynamic "dw_1_1.*" naming
+            remapped_state: dict = {}
+            for k, v in ckpt_state.items():
+                if k.startswith("dw."):
+                    k = k.replace("dw.", "dw_1_1.", 1)
+                remapped_state[k] = v
+            # Ensure the dw_1_1 sub-module exists before loading
+            if hasattr(vec, '_get_dw'):
+                vec._get_dw(1, 1)
+            vec.load_state_dict(remapped_state, strict=True)
+            vec.to(dtype=torch.bfloat16)
+            print(f"Loaded dit_patch_vectorizer ({dit_align_mode}) from checkpoint.")
+        else:
+            print(f"[WARN] dit_patch_vectorizer.* not found in checkpoint — using random init.")
+    else:
+        print(f"[WARN] No safetensors found at {checkpoint_path}.")
+
+    return vec
+
+
 def encode_to_latent_tokens(
     codec: WanVAECodec,
     dit_full: CosmosDiTFullHead,
@@ -82,6 +134,7 @@ def encode_to_latent_tokens(
     dit_sigma_data: float,
     device: torch.device,
     dit_num_blocks_run: Optional[int],
+    vectorizer: Optional[torch.nn.Module] = None,
 ) -> torch.Tensor:
     """
     WAN VAE encode -> pad -> ``CosmosDiTFullHead.forward_hidden`` (DiT blocks only; no ``final_layer``)
@@ -110,7 +163,14 @@ def encode_to_latent_tokens(
                 sigma=float(dit_sigma),
                 sigma_data=float(dit_sigma_data),
             )
-            row = _compress_tokens_like_original(hidden, tokens_per_modality)
+            if vectorizer is not None:
+                # hidden: (B, Tp, Hp, Wp, D), Tp=1 for single frame
+                spatial = hidden[:, 0]  # (B, Hp, Wp, D)
+                row = vectorizer(spatial)  # (B, D)
+                if row.dim() == 1:
+                    row = row.unsqueeze(0)
+            else:
+                row = _compress_tokens_like_original(hidden, tokens_per_modality)
             rows.append(row)
 
         return torch.cat(rows, dim=0)
@@ -164,6 +224,15 @@ def main() -> None:
     )
     p.add_argument("--dit_sigma", type=float, default=1e-5)
     p.add_argument("--dit_sigma_data", type=float, default=0.5)
+    p.add_argument(
+        "--dit_align_mode",
+        type=str,
+        default="mean_pool",
+        choices=["mean_pool", "avg", "conv", "attn", "attn_query"],
+        help="How to compress DiT spatial hidden states to a feature vector. "
+             "'mean_pool' uses the original group mean-pool logic (tokens_per_modality groups); "
+             "others use the training-time vectorizer class (with weights loaded from checkpoint if present).",
+    )
     args = p.parse_args()
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -179,6 +248,9 @@ def main() -> None:
     print(f"Loading CosmosDiTFullHead ({args.cosmos_dit_path}, blocks={args.dit_full_num_blocks}) ...")
     dit_full = CosmosDiTFullHead(args.cosmos_dit_path, num_blocks=args.dit_full_num_blocks, device="cpu")
     dit_full = dit_full.to(device=device, dtype=torch.bfloat16).eval()
+
+    print(f"Building vectorizer (dit_align_mode={args.dit_align_mode}) ...")
+    vectorizer = _build_vectorizer(args.dit_align_mode, args.checkpoint_path, device)
 
     cfg = argparse.Namespace(
         data_path=args.data_path,
@@ -220,6 +292,7 @@ def main() -> None:
             args.dit_sigma_data,
             device,
             args.dit_num_blocks_run,
+            vectorizer=vectorizer,
         )
         latent_fut_img = encode_to_latent_tokens(
             codec,
@@ -232,6 +305,7 @@ def main() -> None:
             args.dit_sigma_data,
             device,
             args.dit_num_blocks_run,
+            vectorizer=vectorizer,
         )
 
         features_img.append(

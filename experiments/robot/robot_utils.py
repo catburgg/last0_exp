@@ -5,6 +5,14 @@
 # weights for state_dict compatibility; those modules are not used in this forward.
 
 import os
+import sys
+from pathlib import Path
+
+_ROOT = Path(__file__).resolve().parents[2]
+if str(_ROOT) not in sys.path:
+    sys.path.insert(0, str(_ROOT))
+
+from utils.latent_ar_layout import build_latent_ar_step_embeds
 import random
 import time
 from typing import Any, Dict, List, Optional, Union
@@ -82,7 +90,10 @@ def get_action(
     fast_img_len = len(fast_image) if fast_image is not None else 0
     use_latent = bool(getattr(cfg, "use_latent", True))
     num_latent_tokens = int(getattr(cfg, "latent_size", 0) or 0) if use_latent else 0
-    
+    latent_num_frames = int(getattr(cfg, "latent_num_frames", 4) or 4)
+    latent_intra_frame_block_attn = bool(getattr(cfg, "latent_intra_frame_block_attn", False))
+    llm_latent_mode = getattr(cfg, "llm_latent_mode", "full_sequence")
+
     state_tokens = ""
     if cfg.use_proprio:
         state = np.array(state, dtype=np.float32)
@@ -138,38 +149,93 @@ def get_action(
 
         input_ids = input_ids.unsqueeze(0)
         latent_pad_id = vl_chat_processor.tokenizer.convert_tokens_to_ids("<|latent_pad|>")
+        latent_start_id = vl_chat_processor.tokenizer.convert_tokens_to_ids("<|latent_start|>")
+        latent_end_id = vl_chat_processor.tokenizer.convert_tokens_to_ids("<|latent_end|>")
         if num_latent_tokens > 0:
             latent_indices = (input_ids == latent_pad_id).nonzero()
             latent_lists = [[idx[1].item() for idx in latent_indices if idx[0] == i] for i in range(input_ids.shape[0])]
-            kv_cache_cot = None
-            next_compute_range = (0, latent_indices[:, 1].min().item())
 
-            # inference for latent cot embeddings
-            for latent_i in range(num_latent_tokens):
-                curr_inputs_embeds = inputs_embeds[:, next_compute_range[0] : next_compute_range[1], :]
-                outputs = vl_gpt.language_model.model(
-                    inputs_embeds=curr_inputs_embeds,
-                    latent_indexes=torch.arange(0, curr_inputs_embeds.shape[1]).to(device),
-                    action_indexes=torch.arange(0, 0).to(device),
-                    use_latent=use_latent,
-                    use_cache=True,
-                    past_key_values=kv_cache_cot if latent_i!=0 else None # for kv cache
-                )
-                next_compute_range = (
-                    next_compute_range[1],
-                    (
-                        input_ids.shape[1]
-                        if latent_i + 1 >= num_latent_tokens
-                        else next_compute_range[1] + 1
-                    ),
-                )
-                hidden_states = outputs[0][:, -1:, :]
-                assert hidden_states.shape[1] == 1
-                kv_cache_cot = outputs.past_key_values
-                for batch_idx, mask_list in enumerate(latent_lists):
-                    if len(mask_list) > latent_i:
-                        token_idx = mask_list[latent_i]
-                        inputs_embeds[batch_idx, token_idx, :] = hidden_states[batch_idx, 0, :]
+            if llm_latent_mode == "ar_frames":
+                if num_latent_tokens % latent_num_frames != 0:
+                    raise ValueError(
+                        f"latent_size ({num_latent_tokens}) must be divisible by latent_num_frames ({latent_num_frames}) "
+                        "when llm_latent_mode=ar_frames"
+                    )
+                tokens_per_frame = num_latent_tokens // latent_num_frames
+                # Inter-frame AR + intra-frame parallel: one LM forward per frame.
+                pred_chunks = []
+                for f in range(latent_num_frames):
+                    prev = None
+                    if f > 0:
+                        prev = torch.cat(pred_chunks, dim=1)
+                    step_embeds, step_attn, cur_start = build_latent_ar_step_embeds(
+                        inputs_embeds,
+                        input_ids.squeeze(0),
+                        f,
+                        tokens_per_frame,
+                        latent_start_id,
+                        latent_end_id,
+                        prev,
+                    )
+                    L = step_embeds.shape[1]
+                    latent_block_range = None
+                    if latent_intra_frame_block_attn:
+                        latent_block_range = (cur_start, cur_start + tokens_per_frame)
+                    outputs = vl_gpt.language_model.model(
+                        inputs_embeds=step_embeds,
+                        attention_mask=step_attn,
+                        latent_indexes=torch.arange(0, L, device=device),
+                        action_indexes=torch.arange(0, 0, device=device),
+                        use_latent=use_latent,
+                        use_cache=False,
+                        latent_block_range=latent_block_range,
+                    )
+                    hidden_states = outputs.last_hidden_state
+                    # Frame-level shift: frame f is predicted by the hidden states
+                    # of frame f-1 (or by hidden[latent_start] repeated K times for f=0).
+                    if f == 0:
+                        # cur_start - 1 == ls (latent_start position in step_embeds)
+                        pred_frame = (
+                            hidden_states[:, cur_start - 1 : cur_start, :]
+                            .expand(-1, tokens_per_frame, -1).contiguous()
+                        )
+                    else:
+                        # hidden states at the previous frame's K positions
+                        pred_frame = hidden_states[:, cur_start - tokens_per_frame : cur_start, :]
+                    pred_chunks.append(pred_frame.detach())
+                    for batch_idx, mask_list in enumerate(latent_lists):
+                        for k in range(tokens_per_frame):
+                            token_idx = mask_list[f * tokens_per_frame + k]
+                            inputs_embeds[batch_idx, token_idx, :] = pred_frame[batch_idx, k, :]
+            else:
+                # full_sequence: autoregressive one latent token at a time with KV cache (legacy).
+                kv_cache_cot = None
+                next_compute_range = (0, latent_indices[:, 1].min().item())
+                for latent_i in range(num_latent_tokens):
+                    curr_inputs_embeds = inputs_embeds[:, next_compute_range[0] : next_compute_range[1], :]
+                    outputs = vl_gpt.language_model.model(
+                        inputs_embeds=curr_inputs_embeds,
+                        latent_indexes=torch.arange(0, curr_inputs_embeds.shape[1]).to(device),
+                        action_indexes=torch.arange(0, 0).to(device),
+                        use_latent=use_latent,
+                        use_cache=True,
+                        past_key_values=kv_cache_cot if latent_i != 0 else None,
+                    )
+                    next_compute_range = (
+                        next_compute_range[1],
+                        (
+                            input_ids.shape[1]
+                            if latent_i + 1 >= num_latent_tokens
+                            else next_compute_range[1] + 1
+                        ),
+                    )
+                    hidden_states = outputs[0][:, -1:, :]
+                    assert hidden_states.shape[1] == 1
+                    kv_cache_cot = outputs.past_key_values
+                    for batch_idx, mask_list in enumerate(latent_lists):
+                        if len(mask_list) > latent_i:
+                            token_idx = mask_list[latent_i]
+                            inputs_embeds[batch_idx, token_idx, :] = hidden_states[batch_idx, 0, :]
 
         noise = torch.randn(inputs_embeds.shape[0], cfg.num_open_loop_steps, 7, device=device)
         samples = vl_gpt.forward_flow(inputs_embeds, noise)
